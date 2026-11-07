@@ -1,0 +1,5 @@
+# Local planning notes (contain local paths and names)
+docs/
+
+.DS_Store
+node_modules/
