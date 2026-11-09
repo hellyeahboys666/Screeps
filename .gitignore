@@ -3,3 +3,9 @@ docs/
 
 .DS_Store
 node_modules/
+
+# Reproducible verbose simulation output; the compact report is committed.
+tests/fixtures/base-builder/simulation-results.json
+tests/fixtures/base-builder/*.log
+planner-agent-simulation-results.json
+planner-agent-simulation.log

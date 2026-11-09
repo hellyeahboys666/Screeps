@@ -1,0 +1,232 @@
+{
+  "api": [
+    {
+      "method": "GET",
+      "ok": true,
+      "path": "/api/game/room-terrain?room=E9S18&shard=shard3&encoded=1",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "ok": true,
+      "path": "/api/game/room-objects?room=E9S18&shard=shard3",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "ok": true,
+      "path": "/api/user/memory?path=rooms.E9S18.baseBuilder.plan&shard=shard3",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "ok": true,
+      "path": "/api/game/room-terrain?room=E9S19&shard=shard3&encoded=1",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "ok": true,
+      "path": "/api/game/room-objects?room=E9S19&shard=shard3",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "ok": true,
+      "path": "/api/user/memory?path=rooms.E9S19.baseBuilder.plan&shard=shard3",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "ok": true,
+      "path": "/api/game/room-terrain?room=E7S18&shard=shard3&encoded=1",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "ok": true,
+      "path": "/api/game/room-objects?room=E7S18&shard=shard3",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "ok": true,
+      "path": "/api/user/memory?path=rooms.E7S18.baseBuilder.plan&shard=shard3",
+      "status": 200
+    }
+  ],
+  "expectedFixtureCount": 6,
+  "failures": [],
+  "fixtures": [
+    {
+      "capturedAt": "2026-11-09T14:17:05Z",
+      "livePlanEntries": 32,
+      "objectCount": 217,
+      "path": "tests/fixtures/base-builder/E9S18.json",
+      "room": "E9S18",
+      "siteTypes": {},
+      "terrainCounts": {
+        "0": 1023,
+        "1": 1381,
+        "2": 96
+      },
+      "terrainLength": 2500,
+      "terrainSha256": "45a119cd8fe76d9a0ccbc031721dc132a8a73b4c930f8747b20c083ef1da4360",
+      "types": {
+        "container": 4,
+        "controller": 1,
+        "extension": 50,
+        "extractor": 1,
+        "lab": 3,
+        "link": 2,
+        "mineral": 1,
+        "powerSpawn": 1,
+        "rampart": 11,
+        "road": 130,
+        "source": 2,
+        "spawn": 3,
+        "storage": 1,
+        "terminal": 1,
+        "tower": 6
+      },
+      "variant": "existing"
+    },
+    {
+      "capturedAt": "2026-11-09T14:17:05Z",
+      "livePlanEntries": null,
+      "objectCount": 5,
+      "path": "tests/fixtures/base-builder/E9S18.fresh.json",
+      "room": "E9S18",
+      "siteTypes": {},
+      "terrainCounts": {
+        "0": 1023,
+        "1": 1381,
+        "2": 96
+      },
+      "terrainLength": 2500,
+      "terrainSha256": "45a119cd8fe76d9a0ccbc031721dc132a8a73b4c930f8747b20c083ef1da4360",
+      "types": {
+        "controller": 1,
+        "mineral": 1,
+        "source": 2,
+        "spawn": 1
+      },
+      "variant": "fresh"
+    },
+    {
+      "capturedAt": "2026-11-09T14:17:08Z",
+      "livePlanEntries": 29,
+      "objectCount": 228,
+      "path": "tests/fixtures/base-builder/E9S19.json",
+      "room": "E9S19",
+      "siteTypes": {},
+      "terrainCounts": {
+        "0": 1845,
+        "1": 614,
+        "2": 41
+      },
+      "terrainLength": 2500,
+      "terrainSha256": "9de82046e1b52a864c265d92d23f5fe122c4c9c70c442a0c5c2d616f271f985c",
+      "types": {
+        "constructedWall": 27,
+        "container": 3,
+        "controller": 1,
+        "extension": 60,
+        "extractor": 1,
+        "lab": 6,
+        "link": 2,
+        "mineral": 1,
+        "nuker": 1,
+        "observer": 1,
+        "powerSpawn": 1,
+        "rampart": 2,
+        "road": 109,
+        "source": 2,
+        "spawn": 3,
+        "storage": 1,
+        "terminal": 1,
+        "tower": 6
+      },
+      "variant": "existing"
+    },
+    {
+      "capturedAt": "2026-11-09T14:17:08Z",
+      "livePlanEntries": null,
+      "objectCount": 5,
+      "path": "tests/fixtures/base-builder/E9S19.fresh.json",
+      "room": "E9S19",
+      "siteTypes": {},
+      "terrainCounts": {
+        "0": 1845,
+        "1": 614,
+        "2": 41
+      },
+      "terrainLength": 2500,
+      "terrainSha256": "9de82046e1b52a864c265d92d23f5fe122c4c9c70c442a0c5c2d616f271f985c",
+      "types": {
+        "controller": 1,
+        "mineral": 1,
+        "source": 2,
+        "spawn": 1
+      },
+      "variant": "fresh"
+    },
+    {
+      "capturedAt": "2026-11-09T14:17:11Z",
+      "livePlanEntries": 40,
+      "objectCount": 150,
+      "path": "tests/fixtures/base-builder/E7S18.json",
+      "room": "E7S18",
+      "siteTypes": {},
+      "terrainCounts": {
+        "0": 1177,
+        "1": 1323
+      },
+      "terrainLength": 2500,
+      "terrainSha256": "bbbbf4157323b45ccbf7c309871dc1c0265d8d19707ffdede8606962c4591247",
+      "types": {
+        "container": 3,
+        "controller": 1,
+        "extension": 50,
+        "extractor": 1,
+        "lab": 3,
+        "link": 4,
+        "mineral": 1,
+        "rampart": 7,
+        "road": 71,
+        "source": 2,
+        "spawn": 2,
+        "storage": 1,
+        "terminal": 1,
+        "tower": 3
+      },
+      "variant": "existing"
+    },
+    {
+      "capturedAt": "2026-11-09T14:17:11Z",
+      "livePlanEntries": null,
+      "objectCount": 5,
+      "path": "tests/fixtures/base-builder/E7S18.fresh.json",
+      "room": "E7S18",
+      "siteTypes": {},
+      "terrainCounts": {
+        "0": 1177,
+        "1": 1323
+      },
+      "terrainLength": 2500,
+      "terrainSha256": "bbbbf4157323b45ccbf7c309871dc1c0265d8d19707ffdede8606962c4591247",
+      "types": {
+        "controller": 1,
+        "mineral": 1,
+        "source": 2,
+        "spawn": 1
+      },
+      "variant": "fresh"
+    }
+  ],
+  "methods": [
+    "GET"
+  ],
+  "shard": "shard3",
+  "verifiedFixtureCount": 6
+}

@@ -151,7 +151,8 @@ function planDefense(input, layout = [], options = {}) {
     }
     const ramparts = new Set(input.structures.concat(input.sites).filter(o => o.type === 'rampart').map(o => index(o.pos)));
     const entries = [], placed = new Set(), blockers = [];
-    for (const object of structures) {
+    const vitals = structures.concat(input.sites, layout.map(o => Object.assign({my: true}, o)));
+    for (const object of vitals) {
         if (!object.my || !Object.prototype.hasOwnProperty.call(VITAL, object.type)) continue;
         const cell = index(object.pos);
         if (ramparts.has(cell) || placed.has(cell)) continue;
@@ -159,13 +160,9 @@ function planDefense(input, layout = [], options = {}) {
             blockers.push('vitalOverlayDeferred:' + object.id + ':exitEdge');
             continue;
         }
-        if (sites.has(cell)) {
-            const reason = 'vitalOverlayDeferred:' + object.id + ':occupiedSite';
-            if (!blockers.includes(reason)) blockers.push(reason);
-            continue;
-        }
         if (input.terrain[cell] || conflicting.has(cell)) continue;
-        entries.push({type: 'rampart', purpose: 'vitalOverlay', pos: pos(cell), priority: VITAL[object.type]});
+        entries.push({type: 'rampart', purpose: 'vitalOverlay', pos: pos(cell),
+            priority: VITAL[object.type], requiresType: object.type});
         placed.add(cell);
     }
     entries.sort((a, b) => a.priority - b.priority || a.pos.y - b.pos.y || a.pos.x - b.pos.x);
@@ -195,11 +192,11 @@ function planDefense(input, layout = [], options = {}) {
     const core = new Uint8Array(CELLS), eligible = new Uint8Array(CELLS);
     // Every owned vital (not merely those near the anchor) must lie behind a
     // claimed perimeter. Widely scattered vitals may exceed the cut budget.
-    const vitals = structures.filter(o => o.my && Object.prototype.hasOwnProperty.call(VITAL, o.type));
+    const protectedVitals = vitals.filter(o => o.my && Object.prototype.hasOwnProperty.call(VITAL, o.type));
     for (let i = 0; i < CELLS; i++) {
         if (!passable[i]) continue;
         const p = pos(i);
-        if (range(p, input.anchor.pos) <= 1 || vitals.some(o => range(p, o.pos) <= 1)) core[i] = 1;
+        if (range(p, input.anchor.pos) <= 1 || protectedVitals.some(o => range(p, o.pos) <= 1)) core[i] = 1;
     }
     const reserved = new Set(layout.map(e => index(e.pos)));
     for (const o of input.structures.concat(input.sites, input.sources, input.minerals, [input.controller])) {

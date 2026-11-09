@@ -1,19 +1,30 @@
 // Room-level lifecycle. Deliberately inert until a room mode or new-room policy is set.
-var PLAN_VERSION = 1;
+var PLAN_VERSION = 2;
 function result(state, status, detail) {
     state.status = status;
     state.lastChecked = Game.time;
     return {status: status, detail: detail};
 }
-function ensureSourceFlag(room, state) {
+function ensureSourceFlag(room, state, executor) {
     if (state.autoSourceFlags === false || typeof room.createFlag !== 'function'
         || typeof FIND_FLAGS === 'undefined' || typeof FIND_SOURCES === 'undefined'
         || typeof COLOR_WHITE === 'undefined') return;
     var sources = room.find(FIND_SOURCES), flags = room.find(FIND_FLAGS);
-    if (!Array.isArray(sources) || !Array.isArray(flags)) return;
+    var structures = room.find(FIND_STRUCTURES), sites = room.find(FIND_CONSTRUCTION_SITES);
+    if (!Array.isArray(sources) || !Array.isArray(flags)
+        || !Array.isArray(structures) || !Array.isArray(sites)) return;
+    var cap = executor.typeLimit(room, 'link');
+    if (!cap) return;
+    var linkCount = structures.concat(sites).filter(function(o) {
+        return o.my === true && o.structureType === 'link';
+    }).length;
     for (var entry of state.plan.entries) {
         if (entry.type !== 'link' || typeof entry.purpose !== 'string'
             || entry.purpose.indexOf('sourceLink:') !== 0) continue;
+        if (linkCount >= cap && !structures.some(function(o) {
+            return o.my === true && o.structureType === 'link'
+                && o.pos.x === entry.pos.x && o.pos.y === entry.pos.y;
+        })) continue;
         var sourceId = entry.purpose.slice('sourceLink:'.length);
         var source = sources.filter(function(s) { return s.id === sourceId; })[0];
         if (!source || !source.pos || !Number.isInteger(source.pos.x)
@@ -78,6 +89,9 @@ function run(room, deps) {
     // leave a one-tick gap that permits construction before the cooldown.
     if (typeof FIND_HOSTILE_CREEPS !== 'undefined') {
         var hostiles = room.find(FIND_HOSTILE_CREEPS);
+        var powerHostiles = typeof FIND_HOSTILE_POWER_CREEPS === 'undefined'
+            ? [] : room.find(FIND_HOSTILE_POWER_CREEPS);
+        if (Array.isArray(hostiles) && Array.isArray(powerHostiles)) hostiles = hostiles.concat(powerHostiles);
         if (Array.isArray(hostiles) && hostiles.some(function(h) {
             var owner = h && h.owner && h.owner.username;
             return owner !== 'Invader' && owner !== 'Source Keeper';
@@ -147,7 +161,7 @@ function run(room, deps) {
         hostileCooldown: Number.isInteger(config.hostileCooldown)
             ? Math.max(1500, config.hostileCooldown) : 1500
     });
-    if (placement.status === 'deferred') ensureSourceFlag(room, state);
+    if (placement.status === 'deferred' || placement.status === 'placed') ensureSourceFlag(room, state, deps.executor);
     return result(state, placement.status);
 }
 module.exports = {run: run};

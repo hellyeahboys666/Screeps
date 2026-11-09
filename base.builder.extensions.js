@@ -1,8 +1,9 @@
 // Non-destructive, CPU-bounded extension reservations; executor handles current RCL caps.
+var access = require('base.builder.access');
 function index(x,y) { return y*50+x; }
 function valid(p) { return p && Number.isInteger(p.x) && Number.isInteger(p.y) && p.x >= 0 && p.x < 50 && p.y >= 0 && p.y < 50; }
 function range(a,b) { return Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y)); }
-function passable(t) { return t === 'road' || t === 'rampart' || t === 'container'; }
+
 function planExtensions(input, seed, requested) {
     var failed = {entries:[],blockers:['invalidSnapshot']};
     if (!input || !input.eligible || !valid(input.anchor && input.anchor.pos)
@@ -14,43 +15,14 @@ function planExtensions(input, seed, requested) {
         || !input.structures.concat(input.sites, seed, input.sources, input.minerals || [])
             .every(o => o && valid(o.pos))) return failed;
     var existing = input.structures.concat(input.sites);
-    var ownedCount = existing.filter(o => o.type === 'extension' && o.my).length;
+    var ownedCount = existing.concat(seed).filter(o => o.type === 'extension' && o.my !== false).length;
     var target = Math.max(0, Math.min(60, Number.isInteger(requested) ? requested : 60) - ownedCount);
     var occupied = new Set(existing.concat(seed, input.sources,
         input.minerals || [], [input.controller, input.anchor]).map(o => index(o.pos.x,o.pos.y)));
-    var blocked = new Set(existing.concat(seed).filter(o => !passable(o.type)).map(o => index(o.pos.x,o.pos.y)));
+    var blocked = access.obstacles(input, seed), guard = access.create(input);
     var road = existing.concat(seed).filter(o => o.type === 'road').map(o => o.pos);
-    var goals = seed.filter(o => o.type === 'container').map(o => o.pos);
     var result = [];
-    // Structures a creep has to stand next to: the planned core, and every
-    // extension placed so far (each needs a free neighbour to be refilled).
-    var workers = seed.filter(o => !passable(o.type) && o.type !== 'extractor').map(o => o.pos);
-    function seated(seen, p) {
-        for (var dy=-1;dy<=1;dy++) for (var dx=-1;dx<=1;dx++)
-            if ((dx || dy) && valid({x:p.x+dx,y:p.y+dy}) && seen[index(p.x+dx,p.y+dy)]) return true;
-        return false;
-    }
-    function reachable(extra) {
-        var start = input.anchor.pos, seen = new Uint8Array(2500), queue = [start];
-        seen[index(start.x,start.y)] = 1;
-        for (var h=0;h<queue.length;h++) {
-            var p=queue[h];
-            for (var dy=-1;dy<=1;dy++) for (var dx=-1;dx<=1;dx++) {
-                if (!dx && !dy) continue;
-                var x=p.x+dx,y=p.y+dy,i=index(x,y);
-                if (x<1 || x>48 || y<1 || y>48 || seen[i] || input.terrain[i] === 1 || blocked.has(i)) continue;
-                seen[i]=1; queue.push({x,y});
-            }
-        }
-        for (var goal of goals) if (!seen[index(goal.x,goal.y)]) return false;
-        for (var w of workers) if (!seated(seen, w)) return false;
-        for (var e of result) if (!seated(seen, e.pos)) return false;
-        if (extra && !seated(seen, extra)) return false;
-        var work = false;
-        for (var p of queue) if (range(p,input.controller.pos)<=3) {work=true;break;}
-        return work;
-    }
-    if (!reachable()) return {entries:[],blockers:['initialTargetsDisconnected']};
+    if (guard.check(seed)) return {entries:[],blockers:['initialTargetsDisconnected']};
     var candidates=[];
     for (var y=2;y<=47;y++) for (var x=2;x<=47;x++) {
         var p={x,y}, i=index(x,y), d=range(p,input.anchor.pos);
@@ -73,9 +45,10 @@ function planExtensions(input, seed, requested) {
     for (var candidate of candidates) {
         if (result.length >= target) break;
         var p=candidate.pos,i=index(p.x,p.y);
+        var entry={type:'extension',purpose:'extension:'+(ownedCount+result.length),pos:p,priority:50};
         blocked.add(i);
-        if (!reachable(p)) {blocked.delete(i);continue;}
-        result.push({type:'extension',purpose:'extension:'+(ownedCount+result.length),pos:p,priority:50});
+        if (guard.check(seed.concat(result, entry), access.flood(input, blocked))) {blocked.delete(i);continue;}
+        result.push(entry);
     }
     return {entries:result,blockers:result.length<target ? ['insufficientAccessibleSpace'] : []};
 }

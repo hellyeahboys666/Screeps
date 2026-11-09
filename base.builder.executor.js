@@ -1,4 +1,5 @@
 'use strict';
+var access = require('base.builder.access');
 
 // Only this module issues createConstructionSite. Call once per room/tick; mode is
 // deliberately required so importing this module is never a live opt-in.
@@ -8,6 +9,30 @@ function validPos(pos, roomName) {
         && (!pos.roomName || pos.roomName === roomName);
 }
 function same(a, b) { return a.x === b.x && a.y === b.y; }
+// Total built + owned-site budget. Room keys override global keys, not the
+// whole object. Invalid explicit values fail closed; never remove old assets.
+function typeLimit(room, type) {
+    var official = CONTROLLER_STRUCTURES[type] && CONTROLLER_STRUCTURES[type][room.controller.level];
+    if (!Number.isInteger(official)) return 0;
+    var limit = type === 'factory' ? 0 : type === 'lab' ? 3 : official;
+    var config = typeof Memory !== 'undefined' && Memory.baseBuilder;
+    var state = room.memory && room.memory.baseBuilder;
+    for (var limits of [config && config.typeLimits, state && state.typeLimits]) {
+        if (limits && typeof limits === 'object' && !Array.isArray(limits)
+            && Object.prototype.hasOwnProperty.call(limits, type)) limit = limits[type];
+    }
+    return Number.isInteger(limit) && limit >= 0 ? Math.min(official, limit) : 0;
+}
+function currentAccess(room, anchor, structures, sites, sources, minerals, terrain) {
+    function copy(o) { return {id: o.id, type: o.structureType, my: o.my, pos: o.pos}; }
+    var walls = new Array(2500);
+    for (var y = 0; y < 50; y++) for (var x = 0; x < 50; x++) {
+        walls[y * 50 + x] = (terrain.get(x, y) & TERRAIN_MASK_WALL) ? 1 : 0;
+    }
+    return access.create({anchor: copy(anchor), controller: copy(room.controller),
+        structures: structures.map(copy), sites: sites.map(copy),
+        sources: sources.map(copy), minerals: minerals.map(copy), terrain: walls});
+}
 function ownStructure(obj) {
     return obj.my === true || ((obj.my === false || obj.my === undefined)
         && (obj.structureType === 'road' || obj.structureType === 'container'));
@@ -18,7 +43,7 @@ function overlaps(type, structure) {
     if (type === 'rampart') return beneath !== 'rampart' && beneath !== 'constructedWall';
     if (type === 'road') return beneath === 'container' || beneath === 'rampart';
     if (type === 'container') return beneath === 'road' || beneath === 'rampart';
-    return false;
+    return beneath === 'rampart';
 }
 function authorizedLink(entry, room, sources, options) {
     if (typeof entry.purpose !== 'string' || entry.purpose.indexOf('sourceLink:') !== 0) return true;
@@ -48,6 +73,15 @@ function eligibleTile(entry, room, structures, sites, sources, minerals, terrain
     var mineral = minerals.some(function(o) { return same(o.pos, pos); });
     if (mineral !== (type === 'extractor')) return false;
     if (type !== 'extractor' && (terrain.get(pos.x, pos.y) & TERRAIN_MASK_WALL)) return false;
+    // Non-road/container sites cannot obstruct an open exit's inner edge.
+    if (type !== 'road' && type !== 'container') {
+        for (var offset = -1; offset <= 1; offset++) {
+            if ((pos.x === 1 && !(terrain.get(0, pos.y + offset) & TERRAIN_MASK_WALL))
+                || (pos.x === 48 && !(terrain.get(49, pos.y + offset) & TERRAIN_MASK_WALL))
+                || (pos.y === 1 && !(terrain.get(pos.x + offset, 0) & TERRAIN_MASK_WALL))
+                || (pos.y === 48 && !(terrain.get(pos.x + offset, 49) & TERRAIN_MASK_WALL))) return false;
+        }
+    }
     return structures.every(function(o) {
         return !same(o.pos, pos) || overlaps(type, o);
     });
@@ -139,7 +173,9 @@ function execute(room, snapshot, plan, options) {
         || typeof CONTROLLER_STRUCTURES === 'undefined' || typeof MAX_CONSTRUCTION_SITES !== 'number'
         || plan.entries.some(function(e) {
             return !e || !validPos(e.pos, room.name) || typeof e.type !== 'string'
-                || !CONTROLLER_STRUCTURES[e.type] || !Number.isFinite(e.priority);
+                || !CONTROLLER_STRUCTURES[e.type] || !Number.isFinite(e.priority)
+                || (e.requiresType !== undefined && (e.type !== 'rampart'
+                    || !Object.prototype.hasOwnProperty.call(CONTROLLER_STRUCTURES, e.requiresType)));
         }) || structures.concat(sites, sources, minerals).some(function(o) {
             return !o || !o.pos || !Number.isInteger(o.pos.x) || !Number.isInteger(o.pos.y);
         })) return {status: 'blocked', reason: 'invalidState'};
@@ -172,15 +208,20 @@ function execute(room, snapshot, plan, options) {
         return {status: 'paused', reason: 'attemptOrBackoff'};
     }
     var sorted = plan.entries.slice().sort(compareEntries);
-    var waiting = false;
+    var waiting = false, guard;
     for (var entry of sorted) {
         var pos = entry.pos, type = entry.type;
         if (structures.concat(sites).some(function(o) {
             return o.structureType === type && same(o.pos, pos) && ownStructure(o);
         })) continue;
+        // Future vital overlays must wait for the real underlying structure,
+        // including types intentionally disabled by policy or future RCL caps.
+        if (entry.requiresType && !structures.some(function(o) {
+            return o.my === true && o.structureType === entry.requiresType && same(o.pos, pos);
+        })) { waiting = true; continue; }
         var key = type + ':' + pos.x + ':' + pos.y;
         if (state.quarantined[key]) { waiting = true; continue; }
-        var cap = CONTROLLER_STRUCTURES[type][room.controller.level];
+        var cap = typeLimit(room, type);
         var count = structures.filter(function(o) { return o.structureType === type && ownStructure(o); }).length
             + sites.filter(function(o) { return o.structureType === type && o.my === true; }).length;
         if (!Number.isInteger(cap) || count >= cap || !authorizedLink(entry, room, sources, options)) {
@@ -188,6 +229,13 @@ function execute(room, snapshot, plan, options) {
             continue;
         }
         if (!eligibleTile(entry, room, structures, sites, sources, minerals, terrain)) { waiting = true; continue; }
+        // Stored plans can become unsafe after manual construction. Recheck the
+        // eventual hard obstacles (including pending sites) before issuing an
+        // intent; one small room flood per candidate, no persistent terrain.
+        if (!access.passable(type)) {
+            if (!guard) guard = currentAccess(room, anchor, structures, sites, sources, minerals, terrain);
+            if (guard.check([entry])) { waiting = true; continue; }
+        }
         var spawnName;
         if (type === 'spawn') {
             spawnName = 'BB-' + room.name + '-' + pos.x + '-' + pos.y;
@@ -220,4 +268,4 @@ function execute(room, snapshot, plan, options) {
     }
     return {status: waiting ? 'deferred' : 'complete'};
 }
-module.exports = {execute: execute};
+module.exports = {execute: execute, typeLimit: typeLimit};

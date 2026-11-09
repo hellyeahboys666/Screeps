@@ -1,33 +1,8 @@
 // Pure composition; Screeps runtime passes in modules resolved by module name.
+var access = require('base.builder.access');
 function positionKey(pos) { return pos.y * 50 + pos.x; }
-function range(a, b) { return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)); }
-function passable(type) { return type === 'road' || type === 'container' || type === 'rampart'; }
 function validateAccess(input, entries) {
-    var blocked = new Set(input.structures.concat(input.sites, entries)
-        .filter(function(o) { return !passable(o.type); }).map(function(o) { return positionKey(o.pos); }));
-    for (var target of input.sources.concat(input.minerals || [], [input.controller])) blocked.add(positionKey(target.pos));
-    var seen = new Uint8Array(2500), queue = [input.anchor.pos];
-    seen[positionKey(input.anchor.pos)] = 1;
-    for (var h = 0; h < queue.length; h++) {
-        var p = queue[h];
-        for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
-            if (!dx && !dy) continue;
-            var x = p.x + dx, y = p.y + dy;
-            if (x < 1 || x > 48 || y < 1 || y > 48) continue;
-            var i = y * 50 + x;
-            if (seen[i] || input.terrain[i] || blocked.has(i)) continue;
-            seen[i] = 1; queue.push({x: x, y: y});
-        }
-    }
-    function seat(pos, radius) { return queue.some(function(p) { return range(p, pos) <= radius; }); }
-    if (!input.sources.every(function(s) { return seat(s.pos, 1); })) return 'blockedSourceSeat';
-    if (!seat(input.controller.pos, 3)) return 'blockedControllerSeat';
-    var workers = entries.filter(function(e) {
-        return ['storage','terminal','lab','link','spawn','tower',
-            'factory','powerSpawn','observer','nuker'].indexOf(e.type) !== -1;
-    });
-    if (!workers.every(function(e) { return seat(e.pos, 1); })) return 'blockedWorkerStructure';
-    return null;
+    return access.create(input).check(entries);
 }
 function overlapping(entries, input) {
     var exclusive = new Set(), occupied = new Set(input.structures.concat(input.sites)
@@ -38,7 +13,10 @@ function overlapping(entries, input) {
             || p.x < 0 || p.x > 49 || p.y < 0 || p.y > 49) return 'invalidPosition';
         var key = positionKey(p);
         if (e.type === 'rampart' || e.type === 'extractor') continue;
-        if (exclusive.has(key) || occupied.has(key) || input.terrain[key]) return 'occupiedSite';
+        var roadOverlay = e.type === 'road' && input.structures.concat(input.sites).filter(function(o) {
+            return positionKey(o.pos) === key;
+        }).every(function(o) { return o.type === 'rampart' || o.type === 'container'; });
+        if (exclusive.has(key) || (occupied.has(key) && !roadOverlay) || input.terrain[key]) return 'occupiedSite';
         exclusive.add(key);
     }
     return null;
@@ -72,15 +50,17 @@ function compose(input, deps, options) {
     var expansion = deps.expansion.planExpansion(input, base);
     var extraEntries = expansion.entries || [];
     warnings.push.apply(warnings, expansion.blockers || []);
+    // Reserve connectors to future storage/spawns before extensions can occupy
+    // their approaches. Previously the last two spawns had no road targets.
+    var extraRoads = deps.paths.connectRoads(input, base.concat(extraEntries));
+    if (extraRoads.blockers.length) warnings.push.apply(warnings, extraRoads.blockers);
+    base = base.concat(extraRoads.entries);
     var extensions = deps.extensions.planExtensions(input, base.concat(extraEntries), options.extensionLimit);
     warnings.push.apply(warnings, extensions.blockers || []);
     var staged = base.concat(extraEntries, extensions.entries);
     var blocked = validateAccess(input, staged);
-    while (blocked && extensions.entries.length) {
-        extensions.entries.pop();
-        staged = base.concat(extraEntries, extensions.entries);
-        blocked = validateAccess(input, staged);
-    }
+    // Extensions preserve access candidate-by-candidate; never discard an
+    // arbitrary suffix to compensate for an earlier inaccessible cluster.
     if (blocked && extraEntries.length) {
         warnings.push('expansionAccessDeferred:' + blocked);
         extraEntries = [];

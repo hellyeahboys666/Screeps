@@ -1,0 +1,375 @@
+{
+  "scope": "offline VM intent probes; no engine settlement or live writes",
+  "sourceSha256": {
+    "base.builder.executor.js": "78c12ae3e416ce66f8764c3bd41d1fab44caeba7be487fc0c046ecc6e459772c",
+    "manager.baseBuilder.js": "b3398c812caafa9b3a072949f04da4324a6c79572905c5d559f67b00c7a16cff",
+    "base.builder.runtime.js": "cd41f776a6cb16d8c6526992c51e330d0df3176069a80a7a3328247b4551e7d6",
+    "manager.firstSpawn.js": "45bdd5e508a7b2b2cad3c8a10593d0c44ef6393756875fdb9a2d4e7c9fa91098",
+    "base.builder.firstSpawnRuntime.js": "4cf0593e04ffc91441b457eacab747414c0fe72ba00ba10a22d5e65fb1efc9cc",
+    "main.js": "fc66802f24e8f4e674146ea3e54a54a687a8423f09022cd6fc44cf967316f3c6",
+    "role.builder.js": "e81e5b344a3db75fa68bc2d64cf69b0fa47da8e6b4bb0abb02a04f9e3d053408",
+    "role.harvester.js": "6ca8c52992df1710441263fec78b7faeb2dcc8299bb9ae22bba0362f9dc11c34",
+    "role.upgrader.js": "40714eb08573e13e05dd846911601f383a93fd1dff87a88b6db54d23be8b8391",
+    "creep.counts.js": "fb4204306a053ef822021e102724d8a475887c71f87dfc2ffb2fe8b4f6656c7f"
+  },
+  "probes": [
+    {
+      "name": "base-builder-power-hostile-cooldown-missing",
+      "observation": {
+        "departureTickStatus": "placed",
+        "intents": 1
+      }
+    },
+    {
+      "name": "stale-plan-can-seal-source-access",
+      "observation": {
+        "sourceReachableBefore": true,
+        "sourceReachableAfterCompletion": false,
+        "executorStatus": "placed"
+      }
+    },
+    {
+      "name": "first-spawn-ignores-globalPauseUntil",
+      "observation": {
+        "status": "placed",
+        "intents": 1
+      }
+    },
+    {
+      "name": "first-spawn-ignores-roomPaused",
+      "observation": {
+        "status": "placed",
+        "intents": 1
+      }
+    },
+    {
+      "name": "first-spawn-ignores-roomPauseUntil",
+      "observation": {
+        "status": "placed",
+        "intents": 1
+      }
+    },
+    {
+      "name": "first-spawn-npc-hides-player-cooldown",
+      "observation": {
+        "nextTickStatus": "placed",
+        "playerSightingRecorded": false
+      }
+    },
+    {
+      "name": "first-spawn-cancelled-acknowledged-site-stuck",
+      "observation": {
+        "statusAfterCancellationAndReset": "awaitingSiteReadback"
+      }
+    },
+    {
+      "name": "first-spawn-manual-completion-not-retired",
+      "observation": {
+        "afterLaterSpawnLoss": "placed"
+      }
+    },
+    {
+      "name": "builder-partial-energy-emergency-not-served",
+      "observation": {
+        "partialEnergy": 50,
+        "capacity": 100,
+        "refillFlagPreserved": true,
+        "attemptedAction": "harvestDepletedSource",
+        "fullEnergyControl": "upgrade"
+      }
+    },
+    {
+      "name": "harvester-partial-energy-emergency-not-served",
+      "observation": {
+        "partialEnergy": 50,
+        "capacity": 100,
+        "refillFlagPreserved": true,
+        "attemptedAction": "harvestDepletedSource",
+        "fullEnergyControl": "upgrade"
+      }
+    },
+    {
+      "name": "upgrader-partial-energy-emergency-not-served",
+      "observation": {
+        "partialEnergy": 50,
+        "capacity": 100,
+        "refillFlagPreserved": true,
+        "attemptedAction": "harvestDepletedSource",
+        "fullEnergyControl": "upgrade"
+      }
+    },
+    {
+      "name": "main-emergency-spawn-skips-defense",
+      "observation": {
+        "tower": 0,
+        "safeMode": 0,
+        "emergencySpawn": 1
+      }
+    },
+    {
+      "name": "main-no-spawn-skips-defense",
+      "observation": {
+        "tower": 0,
+        "safeMode": 0,
+        "emergencySpawn": 0
+      }
+    }
+  ],
+  "executorControls": [
+    {
+      "kind": "observe",
+      "status": "inactive"
+    },
+    {
+      "kind": "dryRun",
+      "status": "inactive"
+    },
+    {
+      "kind": "disabled",
+      "status": "inactive"
+    },
+    {
+      "kind": "hostiles",
+      "status": "paused"
+    },
+    {
+      "kind": "cpu",
+      "status": "paused"
+    },
+    {
+      "kind": "roomCap",
+      "status": "paused"
+    },
+    {
+      "kind": "rclCap",
+      "status": "deferred"
+    },
+    {
+      "kind": "missingAnchor",
+      "status": "blocked"
+    }
+  ],
+  "sameTickAttemptGuard": "one intent",
+  "bootstrapTargetControls": {
+    "scenarioCount": 24,
+    "results": [
+      {
+        "rcl": 1,
+        "containers": false,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 1
+      },
+      {
+        "rcl": 1,
+        "containers": true,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 1
+      },
+      {
+        "rcl": 1,
+        "containers": true,
+        "affordable": true,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 1
+      },
+      {
+        "rcl": 2,
+        "containers": false,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 2
+      },
+      {
+        "rcl": 2,
+        "containers": true,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 2
+      },
+      {
+        "rcl": 2,
+        "containers": true,
+        "affordable": true,
+        "minHarvesters": 0,
+        "minLorries": 1,
+        "minBuilders": 1,
+        "minUpgraders": 2
+      },
+      {
+        "rcl": 3,
+        "containers": false,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 3
+      },
+      {
+        "rcl": 3,
+        "containers": true,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 3
+      },
+      {
+        "rcl": 3,
+        "containers": true,
+        "affordable": true,
+        "minHarvesters": 0,
+        "minLorries": 2,
+        "minBuilders": 1,
+        "minUpgraders": 3
+      },
+      {
+        "rcl": 4,
+        "containers": false,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 3
+      },
+      {
+        "rcl": 4,
+        "containers": true,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 3
+      },
+      {
+        "rcl": 4,
+        "containers": true,
+        "affordable": true,
+        "minHarvesters": 0,
+        "minLorries": 2,
+        "minBuilders": 1,
+        "minUpgraders": 3
+      },
+      {
+        "rcl": 5,
+        "containers": false,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 4
+      },
+      {
+        "rcl": 5,
+        "containers": true,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 4
+      },
+      {
+        "rcl": 5,
+        "containers": true,
+        "affordable": true,
+        "minHarvesters": 0,
+        "minLorries": 2,
+        "minBuilders": 1,
+        "minUpgraders": 4
+      },
+      {
+        "rcl": 6,
+        "containers": false,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 4
+      },
+      {
+        "rcl": 6,
+        "containers": true,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 4
+      },
+      {
+        "rcl": 6,
+        "containers": true,
+        "affordable": true,
+        "minHarvesters": 0,
+        "minLorries": 2,
+        "minBuilders": 1,
+        "minUpgraders": 4
+      },
+      {
+        "rcl": 7,
+        "containers": false,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 2
+      },
+      {
+        "rcl": 7,
+        "containers": true,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 2
+      },
+      {
+        "rcl": 7,
+        "containers": true,
+        "affordable": true,
+        "minHarvesters": 0,
+        "minLorries": 1,
+        "minBuilders": 1,
+        "minUpgraders": 2
+      },
+      {
+        "rcl": 8,
+        "containers": false,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 1
+      },
+      {
+        "rcl": 8,
+        "containers": true,
+        "affordable": false,
+        "minHarvesters": 2,
+        "minLorries": 0,
+        "minBuilders": 1,
+        "minUpgraders": 1
+      },
+      {
+        "rcl": 8,
+        "containers": true,
+        "affordable": true,
+        "minHarvesters": 0,
+        "minLorries": 2,
+        "minBuilders": 1,
+        "minUpgraders": 1
+      }
+    ]
+  },
+  "probeCount": 13
+}

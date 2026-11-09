@@ -1,4 +1,5 @@
 // Conservative, deterministic layout seed around a built spawn. Planning does no game writes.
+var access = require('base.builder.access');
 function index(x, y) { return y * 50 + x; }
 function valid(p) { return p && Number.isInteger(p.x) && Number.isInteger(p.y) && p.x >= 0 && p.x < 50 && p.y >= 0 && p.y < 50; }
 function range(a, b) { return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)); }
@@ -6,34 +7,11 @@ function key(p) { return index(p.x, p.y); }
 function interior(p) { return p.x >= 2 && p.x <= 47 && p.y >= 2 && p.y <= 47; }
 
 function obstacles(input, entries) {
-    var blocked = new Set();
-    for (var obj of input.structures.concat(input.sites)) {
-        if (obj.type !== 'road' && obj.type !== 'container' && obj.type !== 'rampart') blocked.add(key(obj.pos));
-    }
-    for (var obj of entries) {
-        if (obj.type !== 'container' && obj.type !== 'road' && obj.type !== 'rampart') blocked.add(key(obj.pos));
-    }
-    return blocked;
+    return access.obstacles(input, entries);
 }
 
 function flood(input, blocked) {
-    // Don't path through exits; they can lead to a different room rather than around a wall.
-    var reachable = new Uint8Array(2500);
-    var queue = [input.anchor.pos];
-    reachable[key(input.anchor.pos)] = 1;
-    for (var head = 0; head < queue.length; head++) {
-        var from = queue[head];
-        for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
-            if (!dx && !dy) continue;
-            var x = from.x + dx, y = from.y + dy;
-            if (x < 1 || x > 48 || y < 1 || y > 48) continue;
-            var i = index(x, y);
-            if (reachable[i] || input.terrain[i] || blocked.has(i)) continue;
-            reachable[i] = 1;
-            queue.push({x: x, y: y});
-        }
-    }
-    return reachable;
+    return access.flood(input, blocked);
 }
 
 function clearance(input, blocked) {
@@ -66,12 +44,16 @@ function plan(input) {
         || !input.sources.every(function(s) { return valid(s.pos); })
         || !input.structures.concat(input.sites, input.spawns).every(function(o) { return o && valid(o.pos); })) return bad;
     var entries = [], blockers = [];
+    function containerRoom() {
+        return input.structures.concat(input.sites, entries).filter(function(o) { return o.type === 'container'; }).length < 5;
+    }
     var taken = new Set(input.structures.concat(input.sites, input.spawns, input.sources, [input.controller])
         .map(function(o) { return key(o.pos); }));
     for (var mineral of input.minerals || []) {
         if (!valid(mineral.pos)) return bad;
         taken.add(key(mineral.pos));
     }
+    var guard = access.create(input);
     var blocks = obstacles(input, entries);
     var reachable = flood(input, blocks);
     var clear = clearance(input, blocks);
@@ -95,7 +77,7 @@ function plan(input) {
         var hasContainer = input.structures.concat(input.sites).some(function(o) {
             return o.type === 'container' && range(o.pos, source.pos) <= 1;
         });
-        if (hasContainer) continue;
+        if (hasContainer || !containerRoom()) continue;
         var choice = candidates(function(p) { return range(p, source.pos) === 1; },
             function(p) { return range(p, input.anchor.pos) * 10 - clear[key(p)]; })[0];
         if (choice) add('container', 'source:' + source.id, choice.pos, 10);
@@ -104,7 +86,7 @@ function plan(input) {
     var controllerBuffer = input.structures.concat(input.sites).some(function(o) {
         return o.type === 'container' && range(o.pos, input.controller.pos) <= 3;
     });
-    if (!controllerBuffer) {
+    if (!controllerBuffer && containerRoom()) {
         var upgrade = candidates(function(p) {
             return range(p, input.controller.pos) >= 1 && range(p, input.controller.pos) <= 3 && !nearSource(p);
         }, function(p) { return range(p, input.anchor.pos) * 10 + range(p, input.controller.pos); })[0];
@@ -118,7 +100,7 @@ function plan(input) {
             return range(p, input.anchor.pos) >= 2 && range(p, input.anchor.pos) <= 6 && !nearSource(p);
         }, function(p, i) {
             return range(p, input.anchor.pos) * 20 + range(p, input.controller.pos) * 2 - Math.min(clear[i], 5) * 4;
-        })[0];
+        }).find(function(c) { return !guard.check(entries.concat({type: 'storage', pos: c.pos})); });
         if (storage) add('storage', 'coreStorage', storage.pos, 40);
         else blockers.push('noCoreStorageSite');
     }
@@ -127,7 +109,8 @@ function plan(input) {
     if (!hasTower) {
         var tower = candidates(function(p) {
             return range(p, input.anchor.pos) <= 7 && !nearSource(p);
-        }, function(p, i) { return range(p, input.anchor.pos) * 10 - Math.min(clear[i], 5) * 2; })[0];
+        }, function(p, i) { return range(p, input.anchor.pos) * 10 - Math.min(clear[i], 5) * 2; })
+            .find(function(c) { return !guard.check(entries.concat({type: 'tower', pos: c.pos})); });
         if (tower) add('tower', 'coreTower', tower.pos, 30);
         else blockers.push('noCoreTowerSite');
     }
