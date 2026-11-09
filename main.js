@@ -16,6 +16,7 @@ var energyFallback = require('energy.fallback');
 var energyReserveMarket = require('market.energyReserve');
 var combatBoostMarket = require('market.combatBoosts');
 var specialStructureMarket = require('market.specialStructures');
+var mineralSellMarket = require('market.mineralSell');
 var powerSpawnManager = require('power.spawn');
 var powerCreepManager = require('manager.powerCreeps');
 var combatMath = require('combat.math');
@@ -5047,34 +5048,13 @@ module.exports.loop = function () {
             triggerAutoSafeMode(spawn.room, spawn, hostiles);
             powerSpawnManager.run(spawn);
         }
+        if (isPrimaryRoomSpawn(spawn))
+        {
+            // Sells the room's own mineral above a reserve; throttles itself.
+            mineralSellMarket.maintain(spawn.room);
+        }
         if (spawn.room.terminal && shouldRunMarketCheck(spawn))
         {
-            var mineralType = roomPlan.mineralType;
-            if (mineralType == RESOURCE_HYDROGEN || mineralType == RESOURCE_OXYGEN)
-            {
-                var orders = Game.market.getAllOrders({type: ORDER_BUY, resourceType: mineralType}); // fast
-                for (let order of orders)
-                {
-                    if (mineralType == RESOURCE_HYDROGEN && order.price < 75)
-                    {
-                        continue;
-                    }
-                    if (mineralType == RESOURCE_OXYGEN && order.price <= 35)
-                    {
-                        continue;
-                    }
-                    var amount = Math.min(order.amount, spawn.room.terminal.store.getUsedCapacity(mineralType));
-                    if (amount <= 0)
-                    {
-                        continue;
-                    }
-                    var tc = Game.market.calcTransactionCost(amount, order.roomName, spawn.room.name);
-                    if (spawn.room.terminal.store.getUsedCapacity(RESOURCE_ENERGY) > tc)
-                    {
-                        Game.market.deal(order.id, amount, spawn.room.name);
-                    }
-                }
-            }
             // Fully filled orders only take up room toward the 300-order cap.
             for (let id in Game.market.orders)
             {
