@@ -141,13 +141,21 @@ function run(room, deps) {
         return result(state, 'observing');
     }
     if (state.generatedTick >= Game.time) return result(state, 'planned');
-    // A finished plan, or one waiting on RCL caps, only needs a look every 50 ticks.
+    // A finished plan, or one waiting on RCL caps, only needs a look every 50 ticks,
+    // unless something that unlocks work changed: controller level, a site finishing
+    // (vital ramparts wait for their structure), or the typeLimits/minRcl policy.
+    var mySites = room.find(typeof FIND_MY_CONSTRUCTION_SITES !== 'undefined'
+        ? FIND_MY_CONSTRUCTION_SITES : 'myConstructionSites');
+    var wake = room.controller.level + ':' + (Array.isArray(mySites) ? mySites.length : -1) + ':'
+        + JSON.stringify([config.typeLimits, state.typeLimits, config.minRcl, state.minRcl]);
     if ((state.status === 'complete' || state.status === 'deferred')
-        && Number.isInteger(state.lastExecuteTick) && Game.time - state.lastExecuteTick < 50) {
+        && Number.isInteger(state.lastExecuteTick) && Game.time - state.lastExecuteTick < 50
+        && state.lastExecuteWake === wake) {
         return {status: state.status};
     }
     state.lastRunTick = Game.time;
     state.lastExecuteTick = Game.time;
+    state.lastExecuteWake = wake;
     var pauseUntil = Math.max(Number.isInteger(config.pauseUntil) ? config.pauseUntil : -1,
         Number.isInteger(state.pauseUntil) ? state.pauseUntil : -1);
     var placement = deps.executor.execute(room, state.plan, {
