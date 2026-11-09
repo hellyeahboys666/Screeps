@@ -1,3 +1,5 @@
+var marketExposure = require('market.exposure');
+
 var DEFAULT_STOCK_TARGET = (typeof LAB_MINERAL_CAPACITY == 'number' ? LAB_MINERAL_CAPACITY : 3000) * 2;
 var DEFAULT_MIN_ORDER_DEFICIT = 300;
 var DEFAULT_MAX_ORDER_AMOUNT = 6000;
@@ -110,7 +112,7 @@ function getOpenBuyExposure()
             exposure += getOrderRemaining(order) * order.price;
         }
     }
-    return exposure;
+    return exposure + marketExposure.getPending();
 }
 
 function getOpenRoomBuyAmount(roomName)
@@ -206,7 +208,10 @@ function getBestOrderPrice(resourceType, type)
         var best = undefined;
         for (let order of orders)
         {
-            if (!order || !isFiniteNumber(order.price) || getOrderRemaining(order) <= 0)
+            // getAllOrders includes our own orders; counting our own bid as the
+            // best buy would keep our price from ever coming down.
+            if (!order || !isFiniteNumber(order.price) || getOrderRemaining(order) <= 0
+                || Game.market.orders[order.id])
             {
                 continue;
             }
@@ -360,13 +365,19 @@ function changeOrderPriceSafely(orderEntry, price, affordability, status)
     var remaining = getOrderRemaining(order);
     var extraExposure = Math.max(0, price - order.price) * remaining;
     status.priceChangeExtraExposure = Math.ceil(extraExposure);
-    if (extraExposure > 0 && affordability.amount <= 0)
+    // affordability.amount * price is what the credit floor and exposure cap
+    // leave free after the 5% fee; a raise has to fit in it.
+    if (extraExposure > 0 && extraExposure > affordability.amount * price)
     {
         status.reason = 'creditFloorOrExposureLimit';
         return false;
     }
     status.result = Game.market.changeOrderPrice(orderEntry.id, price);
     status.reason = status.result == OK ? 'repriced' : 'repriceFailed';
+    if (status.result == OK)
+    {
+        marketExposure.addPending(extraExposure * 1.05);
+    }
     return true;
 }
 
@@ -480,6 +491,10 @@ function maintainBoostResource(spawn, boost, lab, status)
         status.orderId = bestOwnOrder.id;
         status.result = Game.market.extendOrder(bestOwnOrder.id, orderAmount);
         status.reason = status.result == OK ? 'extended' : 'extendFailed';
+        if (status.result == OK)
+        {
+            marketExposure.addPending(orderAmount * bestOwnOrder.order.price * 1.05);
+        }
         return;
     }
 
@@ -491,6 +506,10 @@ function maintainBoostResource(spawn, boost, lab, status)
         roomName: spawn.room.name
     });
     status.reason = status.result == OK ? 'created' : 'createFailed';
+    if (status.result == OK)
+    {
+        marketExposure.addPending(orderAmount * priceContext.price * 1.05);
+    }
 }
 
 function maintain(spawn)

@@ -10,9 +10,7 @@ var roleLinker = {
         if (creep.room.controller)
         {
             var CLinks = sourceLinkUtils.findUsableControllerLinks(creep.room.controller);
-            CLink = creep.pos.findClosestByPath(CLinks)
-                || creep.pos.findClosestByRange(CLinks)
-                || CLinks[0];
+            CLink = CLinks.length > 1 ? creep.pos.findClosestByRange(CLinks) : CLinks[0];
         }
         var BLink = storage ? storage.pos.findInRange(FIND_MY_STRUCTURES, 3, 
         {
@@ -73,12 +71,13 @@ var roleLinker = {
             }
             creep.memory.sourceId = source.id;
             var sourceLinks = sourceLinkUtils.findUsableSourceLinks(source);
-            var SLink = creep.pos.findClosestByPath(sourceLinks)
-                || creep.pos.findClosestByRange(sourceLinks)
-                || sourceLinks[0];
+            var SLink = sourceLinks.length > 1 ? creep.pos.findClosestByRange(sourceLinks) : sourceLinks[0];
             var seat = SLink ? sourceLinkUtils.findSharedSourceLinkSeat(creep, source, SLink) : undefined;
             var moveToSeat = seat && !sourceLinkUtils.isSharedSourceLinkSeat(creep.pos, source, SLink);
-            if (SLink && creep.carry.energy > 0)
+            // Transfer only when the next harvest would not fit; transfer is
+            // processed before harvest, so batching never overflows.
+            if (SLink && creep.carry.energy > 0
+                && creep.store.getFreeCapacity(RESOURCE_ENERGY) < creep.getActiveBodyparts(WORK) * HARVEST_POWER)
             {
                 if(creep.transfer(SLink, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE)
                 {
@@ -304,15 +303,12 @@ function isSlinkerFlagAssigned(flagName, creep)
     return false;
 }
 
+// The source a flagged Slinker is assigned to. It writes memory.sourceId
+// together with memory.flag every run, so this skips revalidating the flag.
 function getSlinkerAssignedSourceId(creep)
 {
-    var flag = creep.memory.flag ? Game.flags[creep.memory.flag] : undefined;
-    if (!isValidSlinkerFlag(flag, creep.room.name))
-    {
-        return undefined;
-    }
-    var source = getSlinkerFlagSource(flag);
-    return source ? source.id : undefined;
+    var flagName = creep.memory.flag;
+    return flagName && Game.flags[flagName] ? creep.memory.sourceId : undefined;
 }
 
 function isSlinkerSourceAssigned(sourceId, creep)

@@ -38,6 +38,12 @@ var roleQuad = {
         {
             return;
         }
+        if ((squadMemory.formedMembers || squadMemory.topLeft != undefined)
+            && !hasFormedSquadSurvivor(members, squadMemory))
+        {
+            // Nobody from the last packed squad is alive: a new squad is reusing this name.
+            resetStaleSquadState(squadMemory);
+        }
         if (squadMemory.autoNormalizeSlots !== false)
         {
             normalizeSlotsIfAlreadyPacked(members);
@@ -51,9 +57,7 @@ var roleQuad = {
 
         if (members.length < 4)
         {
-            var hadFullSquad = squadMemory.formed == true
-                || squadMemory.retreatingAfterLoss == true
-                || squadMemory.topLeft != undefined;
+            var hadFullSquad = hasFormedSquadSurvivor(members, squadMemory);
             squadMemory.formed = false;
             delete squadMemory.packTopLeft;
             healSquad(currentRoom, members, false);
@@ -111,6 +115,8 @@ var roleQuad = {
         squadMemory.state = 'packed';
         squadMemory.formed = true;
         squadMemory.topLeft = serializePos(packed.topLeft);
+        squadMemory.formedMembers = members.map(function(m) { return m.name; });
+        delete squadMemory.packTopLeft;
         markNarrowFormationRepacked(squadMemory, packed.topLeft);
 
         var damage = estimateIncomingDamage(currentRoom, members);
@@ -174,6 +180,7 @@ var roleQuad = {
             }
 
             squadMemory.state = 'crossing_exit_unpacked';
+            squadMemory.crossRoomTo = exitGoal ? exitGoal.room : undefined;
             squadMemory.formed = false;
             delete squadMemory.packTopLeft;
             moveIncompleteSquad(members, targetFlag, targetRoom, undefined,
@@ -186,13 +193,11 @@ var roleQuad = {
 
         var target = chooseAttackTarget(currentRoom, members, packed.topLeft, targetFlag, squadMemory);
         var movementGoal = getMovementGoal(currentRoom, packed.topLeft, target, targetFlag, targetRoom, members);
-        var blocker = movementGoal ? getNextStepBlocker(packed.topLeft, movementGoal, members, squadMemory) : undefined;
-        var focusTarget = blocker || target;
-
-        attackNearby(members, focusTarget);
 
         if (retreatStatus.shouldRetreat)
         {
+            // The forward path's blocker does not matter while retreating; skip that path search.
+            attackNearby(members, target);
             if (kiteQuadAwayFromDamage(currentRoom, members, packed.topLeft, squadMemory, retreatStatus))
             {
                 return;
@@ -201,6 +206,11 @@ var roleQuad = {
             retreatQuad(members, packed.topLeft, squadMemory, targetRoom);
             return;
         }
+
+        var blocker = movementGoal ? getNextStepBlocker(packed.topLeft, movementGoal, members, squadMemory) : undefined;
+        var focusTarget = blocker || target;
+
+        attackNearby(members, focusTarget);
 
         if (blocker)
         {
@@ -311,10 +321,14 @@ function getActiveMembers(members)
     var active = [];
     for (var i = 0; i < members.length; i++)
     {
-        var slot = members[i].memory.slot;
-        if (typeof slot == 'number' && slot >= 0 && slot < 4)
+        var c = members[i];
+        var slot = c.memory.slot;
+        // main.js keeps strict-boost members at the labs until boosted; do not drive them.
+        var stillBoosting = c.memory.boostStrict === true && c.memory.boosted !== true
+            && (!c.memory.home || c.room.name == c.memory.home);
+        if (typeof slot == 'number' && slot >= 0 && slot < 4 && !c.spawning && !stillBoosting)
         {
-            active.push(members[i]);
+            active.push(c);
         }
     }
     return active;
@@ -523,7 +537,9 @@ function getPackedInfo(members)
     var roomName = bySlot[0].room.name;
     for (var i = 0; i < 4; i++)
     {
-        if (bySlot[i].room.name != roomName || bySlot[i].fatigue > 0)
+        // Fatigue does not break the formation: movePackedToTopLeft and the slot
+        // swap already wait until every member can move.
+        if (bySlot[i].room.name != roomName)
         {
             return undefined;
         }
@@ -585,6 +601,32 @@ function holdIncompleteSquad(members, rallyPos)
         {
             member.moveTo(homeSpawn, {range: 2, reusePath: 10});
         }
+    }
+}
+
+function hasFormedSquadSurvivor(members, squadMemory)
+{
+    var names = squadMemory.formedMembers || [];
+    for (var i = 0; i < members.length; i++)
+    {
+        if (names.indexOf(members[i].name) >= 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+function resetStaleSquadState(squadMemory)
+{
+    var keys = ['state', 'formed', 'formedMembers', 'topLeft', 'packTopLeft', 'retreatingAfterLoss',
+        'memberLostAt', 'memberLostLiveCount', 'lastRetreatAt', 'roomPath', 'lastRoom',
+        'narrowFormationActive', 'narrowOrder', 'narrowGoal', 'narrowGoalTargetRange',
+        'crossRoomExit', 'crossRoomExitType', 'crossRoomTo', 'retreatExit', 'retreatExitType',
+        'pathIncompleteStreak'];
+    for (var i = 0; i < keys.length; i++)
+    {
+        delete squadMemory[keys[i]];
     }
 }
 
@@ -1188,10 +1230,15 @@ function packSquad(members, squadMemory, targetFlag, targetRoom, rallyPos)
     var roomName = members[0].room.name;
     if (!allInSameRoom(members, roomName))
     {
-        moveIncompleteSquad(members, targetFlag, targetRoom, rallyPos, getUnpackedTravelOptions(squadMemory));
+        // Split mid-crossing: regroup on the far side of the exit, not back at the home rally.
+        var travelRally = isValidRoomName(squadMemory.crossRoomTo) && !isRetreatState(squadMemory.state)
+            ? getRoomCenterPos(squadMemory.crossRoomTo)
+            : rallyPos;
+        moveIncompleteSquad(members, targetFlag, targetRoom, travelRally, getUnpackedTravelOptions(squadMemory));
         delete squadMemory.packTopLeft;
         return;
     }
+    delete squadMemory.crossRoomTo;
 
     var topLeft = deserializePos(squadMemory.packTopLeft);
     if (!topLeft || topLeft.roomName != roomName || !canStandQuadAt(topLeft, members, false))
@@ -1542,6 +1589,11 @@ function estimateIncomingDamage(room, members)
 function healSquad(room, members, packed, incomingDamage)
 {
     incomingDamage = incomingDamage || {};
+    if (!squadNeedsHeal(members, incomingDamage))
+    {
+        // A heal on a full-hits creep still costs 0.2 CPU per intent; only pre-heal under threat.
+        return;
+    }
     if (packed)
     {
         var healPlan = getPackedHealPlan(members, incomingDamage);
@@ -1606,6 +1658,30 @@ function healSquad(room, members, packed, incomingDamage)
             }
         }
     }
+}
+
+function squadNeedsHeal(members, incomingDamage)
+{
+    var checkedRooms = {};
+    for (var i = 0; i < members.length; i++)
+    {
+        var member = members[i];
+        if (member.hits < member.hitsMax || (incomingDamage[member.name] || 0) > 0)
+        {
+            return true;
+        }
+        if (checkedRooms[member.room.name])
+        {
+            continue;
+        }
+        checkedRooms[member.room.name] = true;
+        if (member.room.find(FIND_HOSTILE_CREEPS, {filter: isHostile}).length > 0
+            || member.room.find(FIND_HOSTILE_STRUCTURES, {filter: isActiveHostileTower}).length > 0)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 function chooseHealTarget(members, incomingDamage)
@@ -1731,11 +1807,23 @@ function getRetreatStatus(members, incomingDamage)
         maxUncoveredDamage: healPlan.maxUncoveredDamage,
         totalUncoveredDamage: healPlan.totalUncoveredDamage,
         worstProjected: healPlan.worstProjected,
-        shouldRetreat: healPlan.worstProjected < RETREAT_EXPECTED_HITS
+        // Each tower/creep hits one member per tick, so the worst case is every
+        // source focusing one member while all packed healers heal that member.
+        // incomingDamage already charges every source against every member, so
+        // totalDamage and per-member uncovered damage would count each source 4x.
+        shouldRetreat: getFocusFireWorstProjected(members, incomingDamage || {}, healPlan.totalHeal) < RETREAT_EXPECTED_HITS
             || healPlan.maxDamage > healPlan.totalHeal
-            || healPlan.totalDamage > healPlan.totalHeal
-            || healPlan.maxUncoveredDamage > 0
     };
+}
+
+function getFocusFireWorstProjected(members, incomingDamage, totalHeal)
+{
+    var worst = Infinity;
+    for (var i = 0; i < members.length; i++)
+    {
+        worst = Math.min(worst, combatMath.projectedHits(members[i], incomingDamage[members[i].name] || 0, totalHeal));
+    }
+    return worst == Infinity ? 0 : worst;
 }
 
 function recordQuadCombatStatus(squadMemory, status)
@@ -1859,6 +1947,18 @@ function getCurrentSlotAssignment(members)
 function chooseBestSlotAssignment(members, topLeft, damageSources, squadMemory, currentAssignment, currentSignature)
 {
     var best = undefined;
+    // Raw damage depends only on the slot tile: compute the 4 tiles once, not per permutation.
+    var rawBySlot = [];
+    for (var s = 0; s < SLOT_OFFSETS.length; s++)
+    {
+        var slotPos = offsetPos(topLeft, SLOT_OFFSETS[s].x, SLOT_OFFSETS[s].y);
+        var rawDamage = 0;
+        for (var k = 0; k < damageSources.length; k++)
+        {
+            rawDamage += getRawDamageFromSourceAtPos(damageSources[k], slotPos);
+        }
+        rawBySlot.push(rawDamage);
+    }
     for (var a = 0; a < 4; a++)
     {
         for (var b = 0; b < 4; b++)
@@ -1881,7 +1981,7 @@ function chooseBestSlotAssignment(members, topLeft, damageSources, squadMemory, 
                     }
                     var assignment = [a, b, c, d];
                     var signature = getSlotAssignmentSignature(members, assignment);
-                    var damage = estimateIncomingDamageForSlotAssignment(members, topLeft, damageSources, assignment);
+                    var damage = estimateIncomingDamageForSlotAssignment(members, rawBySlot, assignment);
                     var status = getRetreatStatus(members, damage);
                     var baseScore = getSlotAssignmentScore(members, damage, status, squadMemory, signature);
                     var score = baseScore + getSlotSwapBacktrackPenalty(signature, squadMemory);
@@ -1907,20 +2007,13 @@ function chooseBestSlotAssignment(members, topLeft, damageSources, squadMemory, 
     return best;
 }
 
-function estimateIncomingDamageForSlotAssignment(members, topLeft, damageSources, assignment)
+function estimateIncomingDamageForSlotAssignment(members, rawBySlot, assignment)
 {
     var result = {};
     for (var i = 0; i < members.length; i++)
     {
         var member = members[i];
-        var slot = assignment[i];
-        var slotPos = offsetPos(topLeft, SLOT_OFFSETS[slot].x, SLOT_OFFSETS[slot].y);
-        var rawDamage = 0;
-        for (var s = 0; s < damageSources.length; s++)
-        {
-            rawDamage += getRawDamageFromSourceAtPos(damageSources[s], slotPos);
-        }
-        result[member.name] = combatMath.damageAfterTough(member, rawDamage);
+        result[member.name] = combatMath.damageAfterTough(member, rawBySlot[assignment[i]]);
     }
     return result;
 }
@@ -2448,15 +2541,17 @@ function getDamageSources(room)
         sources.push({type: 'tower', object: towers[t], pos: towers[t].pos});
     }
 
-    var hostiles = room.find(FIND_HOSTILE_CREEPS,
-    {
-        filter: function(c) {
-            return isHostile(c) && (combatMath.attackPower(c) > 0 || combatMath.rangedAttackPower(c) > 0);
-        }
-    });
+    var hostiles = room.find(FIND_HOSTILE_CREEPS, {filter: isHostile});
     for (var h = 0; h < hostiles.length; h++)
     {
-        sources.push({type: 'creep', object: hostiles[h], pos: hostiles[h].pos});
+        // Scan each body once here; every candidate position reuses these values.
+        var attack = combatMath.attackPower(hostiles[h]);
+        var ranged = combatMath.rangedAttackPower(hostiles[h]);
+        if (attack > 0 || ranged > 0)
+        {
+            sources.push({type: 'creep', object: hostiles[h], pos: hostiles[h].pos,
+                powers: {attack: attack, ranged: ranged, canStep: canHostileStepThisTick(hostiles[h])}});
+        }
     }
     return sources;
 }
@@ -2520,7 +2615,7 @@ function getRawDamageFromSourceAtPos(source, pos)
     }
     if (source.type == 'creep')
     {
-        return estimateMobileHostileRawDamageAt(source.object, pos);
+        return estimateMobileHostileRawDamageAt(source.object, pos, source.powers);
     }
     return 0;
 }
@@ -2532,7 +2627,7 @@ function canHostileStepThisTick(hostile)
         && hostile.getActiveBodyparts(MOVE) > 0;
 }
 
-function estimateMobileHostileRawDamageAt(hostile, target)
+function estimateMobileHostileRawDamageAt(hostile, target, powers)
 {
     if (!hostile || !target)
     {
@@ -2540,15 +2635,15 @@ function estimateMobileHostileRawDamageAt(hostile, target)
     }
     var targetPos = target.pos || target;
     var range = hostile.pos.getRangeTo(targetPos);
-    var canStep = canHostileStepThisTick(hostile);
+    var canStep = powers ? powers.canStep : canHostileStepThisTick(hostile);
     var damage = 0;
     if (range <= 1 || (canStep && range <= 2))
     {
-        damage += combatMath.attackPower(hostile);
+        damage += powers ? powers.attack : combatMath.attackPower(hostile);
     }
     if (range <= 3 || (canStep && range <= 4))
     {
-        damage += combatMath.rangedAttackPower(hostile);
+        damage += powers ? powers.ranged : combatMath.rangedAttackPower(hostile);
     }
     return damage;
 }
@@ -2676,7 +2771,8 @@ function chooseAttackTarget(room, members, topLeft, targetFlag, squadMemory)
         return closestToAnyMember(hostileCreeps, members);
     }
 
-    if (targetFlag)
+    // findInRange throws when the flag's room is not visible.
+    if (targetFlag && targetFlag.pos.roomName == room.name)
     {
         var nearFlagObstacle = lowestHits(targetFlag.pos.findInRange(FIND_STRUCTURES, 3,
         {
@@ -2803,7 +2899,8 @@ function getPackedExitGoal(room, targetRoom, topLeft, members)
                 range: 0,
                 crossRoom: true,
                 exit: serializePos(exits[i]),
-                exitType: route[0].exit
+                exitType: route[0].exit,
+                room: route[0].room
             };
         }
         if (!blockedFallback && canStandQuadAt(stage, members, true))
@@ -2814,6 +2911,7 @@ function getPackedExitGoal(room, targetRoom, topLeft, members)
                 crossRoom: true,
                 exit: serializePos(exits[i]),
                 exitType: route[0].exit,
+                room: route[0].room,
                 blocked: true
             };
         }
@@ -3318,8 +3416,16 @@ function runNarrowFormationMovement(currentRoom, members, squadMemory, targetFla
     }
 
     var anchor = averagePosition(members, currentRoom.name);
-    var target = chooseAttackTarget(currentRoom, members, anchor, targetFlag, squadMemory);
-    var goal = getMovementGoal(currentRoom, anchor, target, targetFlag, targetRoom, members);
+    // Outside the target room, keep heading for the goal that started narrow mode
+    // (usually the exit stage) instead of retargeting on local creeps or the flag.
+    var inTargetRoom = !targetRoom || currentRoom.name == targetRoom;
+    var target = inTargetRoom ? chooseAttackTarget(currentRoom, members, anchor, targetFlag, squadMemory) : undefined;
+    var storedGoal = deserializePos(squadMemory.narrowGoal);
+    var goal = inTargetRoom
+        ? getMovementGoal(currentRoom, anchor, target, targetFlag, targetRoom, members)
+        : (storedGoal && storedGoal.roomName == currentRoom.name
+            ? {pos: storedGoal, range: squadMemory.narrowGoalTargetRange || 0}
+            : undefined);
     var damageSources = getDamageSources(currentRoom);
     var currentPositions = getCurrentPositionsByName(members);
     var currentDamage = estimateIncomingDamageAtPositions(members, currentPositions, damageSources);
@@ -3413,6 +3519,7 @@ function tryMoveNarrowTrain(members, goal, squadMemory, damageSources, currentSt
     squadMemory.narrowOrder = candidate.orderNames;
     squadMemory.narrowLeader = candidate.orderNames[0];
     squadMemory.narrowGoal = goal && goal.pos ? serializePos(goal.pos) : undefined;
+    squadMemory.narrowGoalTargetRange = goal ? goal.range : undefined;
     squadMemory.narrowGoalRange = candidate.goalRange;
     squadMemory.narrowScore = Math.round(candidate.score);
     recordNarrowCombatStatus(squadMemory, candidate.status, 'candidate');
@@ -3435,6 +3542,8 @@ function chooseNarrowMoveCandidate(members, goal, squadMemory, damageSources, cu
     var currentGoalRange = getLooseGoalRange(currentPositions, goal);
     var orders = getNarrowOrderPermutations(members, squadMemory);
     var best = undefined;
+    // Up to 24 orders share only 4 possible leaders; path each leader once.
+    var leaderSteps = {};
     for (var i = 0; i < orders.length; i++)
     {
         var order = orders[i];
@@ -3442,7 +3551,11 @@ function chooseNarrowMoveCandidate(members, goal, squadMemory, damageSources, cu
         {
             continue;
         }
-        var leaderStep = findNarrowLeaderNextPos(order[0], goal, members);
+        if (!(order[0].name in leaderSteps))
+        {
+            leaderSteps[order[0].name] = findNarrowLeaderNextPos(order[0], goal, members);
+        }
+        var leaderStep = leaderSteps[order[0].name];
         if (!leaderStep)
         {
             continue;
@@ -3748,10 +3861,32 @@ function getLooseRetreatStatus(members, positions, incomingDamage)
         maxUncoveredDamage: healPlan.maxUncoveredDamage,
         totalUncoveredDamage: healPlan.totalUncoveredDamage,
         worstProjected: healPlan.worstProjected,
-        shouldRetreat: healPlan.worstProjected < RETREAT_EXPECTED_HITS
-            || healPlan.maxUncoveredDamage > 0
-            || healPlan.totalUncoveredDamage > 0
+        // Same focus-fire model as getRetreatStatus, but each member only gets the
+        // heal that can reach it from its loose position.
+        shouldRetreat: isLooseFocusFireUnhealable(members, positions, incomingDamage || {})
     };
+}
+
+function isLooseFocusFireUnhealable(members, positions, incomingDamage)
+{
+    for (var i = 0; i < members.length; i++)
+    {
+        var reachableHeal = 0;
+        for (var h = 0; h < members.length; h++)
+        {
+            if (members[h].getActiveBodyparts(HEAL) > 0)
+            {
+                reachableHeal += getLooseHealPower(members[h], members[i], positions);
+            }
+        }
+        var damage = incomingDamage[members[i].name] || 0;
+        if (damage > reachableHeal
+            || combatMath.projectedHits(members[i], damage, reachableHeal) < RETREAT_EXPECTED_HITS)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 function getLooseHealPlan(members, positions, incomingDamage)
@@ -3898,10 +4033,7 @@ function getLooseHealAction(healer, target, positions)
 
 function isNarrowStatusHealable(status)
 {
-    return status && status.shouldRetreat !== true
-        && (status.maxUncoveredDamage || 0) <= 0
-        && (status.totalUncoveredDamage || 0) <= 0
-        && (status.worstProjected || 0) >= RETREAT_EXPECTED_HITS;
+    return status && status.shouldRetreat !== true;
 }
 
 function healLooseFormation(members, positions, incomingDamage, status)
@@ -3942,6 +4074,16 @@ function tryRepackFromNarrowFormation(members, squadMemory, targetFlag, rallyPos
     if (!candidate)
     {
         return false;
+    }
+    // Repacking where no 2x2 path continues just restarts narrow mode next tick,
+    // so the train would bounce at the mouth of the corridor forever.
+    if (goal && goal.pos && !isQuadInGoalRange(candidate.topLeft, goal))
+    {
+        var repackPath = findQuadPathResult(candidate.topLeft, goal, members, squadMemory, 'repack', false);
+        if (!repackPath || repackPath.incomplete || !repackPath.path || repackPath.path.length == 0)
+        {
+            return false;
+        }
     }
     if (!executePositionMoveAssignments(members, candidate.positions, squadMemory, 'narrow_repack'))
     {
@@ -4436,25 +4578,68 @@ function findQuadPath(topLeft, goal, members, squadMemory, context, affectsStrea
     return result.path;
 }
 
+// Within a tick nothing a quad path or matrix depends on can change (creep and
+// structure positions, hits, visibility), and PathFinder never mutates a
+// CostMatrix, so both are reused for the rest of the tick.
+var quadPathCache = {key: undefined, result: undefined};
+var quadMatrixCache = {tick: -1, byKey: {}};
+
+function getSquadIdKey(members)
+{
+    var ids = [];
+    for (var i = 0; i < members.length; i++)
+    {
+        ids.push(members[i].id);
+    }
+    return ids.join(',');
+}
+
 function findQuadPathResult(topLeft, goal, members, squadMemory, context, affectsStreak)
 {
     var maxOps = getQuadPathMaxOps(squadMemory);
     var pathGoal = getQuadPathSearchGoal(topLeft, goal);
-    var result = PathFinder.search(topLeft, pathGoal,
+    // getNextStepBlocker and movePackedQuad search the same start/goal each tick.
+    var cacheKey = Game.time + '|' + serializePos(topLeft)
+        + '|' + (goal && goal.pos ? serializePos(goal.pos) : '') + '|' + (goal ? goal.range : '')
+        + '|' + (goal && goal.requireFullQuadRange == true) + '|' + maxOps + '|' + getSquadIdKey(members);
+    var result;
+    if (quadPathCache.key === cacheKey)
     {
-        plainCost: 1,
-        swampCost: 5,
-        maxOps: maxOps,
-        maxRooms: 1,
-        roomCallback: function(roomName) {
-            return quadCostMatrix(roomName, members);
-        }
-    });
+        result = quadPathCache.result;
+    }
+    else
+    {
+        result = PathFinder.search(topLeft, pathGoal,
+        {
+            plainCost: 1,
+            swampCost: 5,
+            maxOps: maxOps,
+            maxRooms: 1,
+            roomCallback: function(roomName) {
+                return quadCostMatrix(roomName, members);
+            }
+        });
+        quadPathCache = {key: cacheKey, result: result};
+    }
     recordQuadPathResult(squadMemory, result, maxOps, topLeft, goal, context, affectsStreak);
     return result;
 }
 
 function quadCostMatrix(roomName, squadMembers)
+{
+    if (quadMatrixCache.tick !== Game.time)
+    {
+        quadMatrixCache = {tick: Game.time, byKey: {}};
+    }
+    var key = roomName + '|' + getSquadIdKey(squadMembers || []);
+    if (!(key in quadMatrixCache.byKey))
+    {
+        quadMatrixCache.byKey[key] = buildQuadCostMatrix(roomName, squadMembers);
+    }
+    return quadMatrixCache.byKey[key];
+}
+
+function buildQuadCostMatrix(roomName, squadMembers)
 {
     var base = baseCostMatrix(roomName, squadMembers || []);
     if (!base)

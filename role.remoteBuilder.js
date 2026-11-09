@@ -168,6 +168,10 @@ function clearRemoteBuildMemory(creep)
     delete creep.memory.depotFlag;
     delete creep.memory.avoidRooms;
     delete creep.memory.conditionalAvoidRooms;
+    delete creep.memory._exitCache;
+    delete creep.memory.buildTargetId;
+    delete creep.memory.buildTargetUntil;
+    delete creep.memory.lastDitch;
 }
 
 function retireCompletedRemoteBuilder(creep)
@@ -254,23 +258,34 @@ function moveToRoom(creep, roomName)
     var avoidRooms = getAvoidRooms(creep);
     if (avoidRooms.length > 0)
     {
-        var route = Game.map.findRoute(creep.room.name, roomName,
+        // Only the first exit is used, so route once per room instead of per tick.
+        var routeKey = creep.room.name + '>' + roomName + '|' + avoidRooms.join(',');
+        var cachedExit = creep.memory._exitCache;
+        if (cachedExit && cachedExit.key == routeKey)
         {
-            routeCallback: function(nextRoomName)
-            {
-                if (avoidRooms.indexOf(nextRoomName) >= 0)
-                {
-                    return Infinity;
-                }
-                return 1;
-            }
-        });
-        if (!Array.isArray(route) || route.length <= 0)
-        {
-            creep.say('no route');
-            return;
+            exit = cachedExit.exit;
         }
-        exit = route[0].exit;
+        else
+        {
+            var route = Game.map.findRoute(creep.room.name, roomName,
+            {
+                routeCallback: function(nextRoomName)
+                {
+                    if (avoidRooms.indexOf(nextRoomName) >= 0)
+                    {
+                        return Infinity;
+                    }
+                    return 1;
+                }
+            });
+            if (!Array.isArray(route) || route.length <= 0)
+            {
+                creep.say('no route');
+                return;
+            }
+            exit = route[0].exit;
+            creep.memory._exitCache = {key: routeKey, exit: exit};
+        }
     }
     else
     {
@@ -617,7 +632,14 @@ function buildOrUpgrade(creep)
         return;
     }
 
-    var target = findBuildTarget(creep);
+    // Re-rank sites every 20 ticks instead of path-searching on every build tick.
+    var target = creep.memory.buildTargetId ? Game.getObjectById(creep.memory.buildTargetId) : null;
+    if (!target || (creep.memory.buildTargetUntil || 0) < Game.time)
+    {
+        target = findBuildTarget(creep);
+        creep.memory.buildTargetId = target ? target.id : undefined;
+        creep.memory.buildTargetUntil = Game.time + 20;
+    }
     if (target)
     {
         var result = creep.build(target);
@@ -670,7 +692,7 @@ var roleRemoteBuilder = {
             {
                 moveToRoom(creep, creep.memory.home);
             }
-            else
+            else if (!moveOffRoomEdge(creep))
             {
                 creep.say('pause');
             }
@@ -692,7 +714,10 @@ var roleRemoteBuilder = {
                 }
                 if (getUsedEnergy(creep) <= 0)
                 {
-                    creep.say('reserve');
+                    if (!moveOffRoomEdge(creep))
+                    {
+                        creep.say('reserve');
+                    }
                     return;
                 }
                 creep.memory.empty = false;
@@ -706,13 +731,20 @@ var roleRemoteBuilder = {
             {
                 if (refillFromDepot(creep))
                 {
+                    delete creep.memory.lastDitch;
                     return;
                 }
-                if (getUsedEnergy(creep) <= 0)
+                // Keep harvesting until full; one harvest tick is too little
+                // energy to justify walking to the build site.
+                if (getUsedEnergy(creep) <= 0 || creep.memory.lastDitch)
                 {
-                    harvestLastDitch(creep);
-                    return;
+                    creep.memory.lastDitch = harvestLastDitch(creep);
+                    if (creep.memory.lastDitch || getUsedEnergy(creep) <= 0)
+                    {
+                        return;
+                    }
                 }
+                delete creep.memory.lastDitch;
                 creep.memory.empty = false;
             }
         }

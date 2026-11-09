@@ -2,6 +2,8 @@
 // Resource purchases are passive BUY orders: sellers pay the transaction energy, which is
 // important while a room's terminal is being refilled by lorries.
 
+var marketExposure = require('market.exposure');
+
 var DEFAULT_POWER_MAX_PRICE = 1750;
 var DEFAULT_GHODIUM_MAX_PRICE = 400;
 var RCL8_POWER_STOCKPILE_TARGET = 10000;
@@ -213,7 +215,7 @@ function getOpenBuyExposure()
             exposure += getOrderRemaining(order) * (order.price || 0);
         }
     }
-    return exposure;
+    return exposure + marketExposure.getPending();
 }
 
 function getBestSellOrder(resource, roomName)
@@ -450,6 +452,28 @@ function maintain(spawn)
             resourceStatus.action = cancelOrder(activeOrder) || 'ready';
             continue;
         }
+        let maxPrice = getConfiguredNumber(spawn,
+            'specialStructureBuyPrices', definition.resource, definition.defaultMaxPrice);
+        let price = getBuyOrderPrice(definition.resource, room.name, maxPrice);
+        resourceStatus.maxPrice = maxPrice;
+        // Keep an open order at the lowest sell price, down as well as up, even
+        // while it already covers the deficit. A raise must fit the credit reserve
+        // (5% fee on the increase); extending waits for the next check.
+        if (activeOrder && price != undefined && activeOrder.price != price)
+        {
+            let extra = Math.max(0, price - activeOrder.price) * activeAmount;
+            resourceStatus.price = price;
+            resourceStatus.action = extra > 0
+                    && (Game.market.credits < creditFloor + exposure + extra * 1.05 || exposure + extra > maxExposure)
+                ? 'reprice would breach credit reserve'
+                : Game.market.changeOrderPrice(activeOrder.id, price);
+            if (resourceStatus.action == OK)
+            {
+                exposure += extra;
+                marketExposure.addPending(extra * 1.05);
+            }
+            continue;
+        }
         if (remaining < minDeficit)
         {
             resourceStatus.action = 'awaiting active order';
@@ -466,12 +490,8 @@ function maintain(spawn)
             continue;
         }
 
-        let maxPrice = getConfiguredNumber(spawn,
-            'specialStructureBuyPrices', definition.resource, definition.defaultMaxPrice);
         let maxOrderAmount = getConfiguredNumber(spawn,
             'specialStructureMaxOrderAmount', definition.resource, definition.defaultMaxOrderAmount);
-        let price = getBuyOrderPrice(definition.resource, room.name, maxPrice);
-        resourceStatus.maxPrice = maxPrice;
         if (price == undefined)
         {
             resourceStatus.reason = 'no sell at or below cap';
@@ -505,11 +525,7 @@ function maintain(spawn)
         var addedOrderAmount = 0;
         if (activeOrder)
         {
-            if (activeOrder.price != price)
-            {
-                resourceStatus.action = Game.market.changeOrderPrice(activeOrder.id, price);
-            }
-            else if (activeAmount < targetOrderAmount)
+            if (activeAmount < targetOrderAmount)
             {
                 addedOrderAmount = amount;
                 resourceStatus.action = Game.market.extendOrder(activeOrder.id, amount);
@@ -535,6 +551,7 @@ function maintain(spawn)
         if (resourceStatus.action == OK && addedOrderAmount > 0)
         {
             exposure += addedOrderAmount * price;
+            marketExposure.addPending(addedOrderAmount * price * 1.05);
             terminalFreeForNewBuys = Math.max(0, terminalFreeForNewBuys - addedOrderAmount);
         }
     }

@@ -2207,7 +2207,9 @@ function isTowerMaintenanceTarget(structure)
     return structure
         && structure.hits != undefined
         && structure.hitsMax > 0
-        && structure.hits < structure.hitsMax
+        // A tower repairs at least 200 per shot; a road scuffed by a few
+        // footsteps would waste nearly all of it (and 0.2 CPU per tower).
+        && structure.hitsMax - structure.hits >= Math.min(200, Math.floor(structure.hitsMax / 5))
         && structure.structureType != STRUCTURE_WALL
         && structure.structureType != STRUCTURE_RAMPART
         && (structure.my == true
@@ -2369,7 +2371,8 @@ function runTowerDefense(room, towers, hostiles, decayingRamparts, creepsInRoom,
         ? rampartMaintenanceTargets[0] : undefined;
     var maintenanceTargets = (!hostiles || hostiles.length == 0)
         ? getRoomTowerMaintenanceTargets(room) : [];
-    var maintenanceTarget = maintenanceTargets[0];
+    // Each maintaining tower takes the next target instead of all hitting the first.
+    var maintenanceIndex = 0;
     var orderedTowers = activeTowers.slice();
     if (healInfo && healInfo.target && (healBeforeAttack || !attackInfo))
     {
@@ -2381,6 +2384,7 @@ function runTowerDefense(room, towers, hostiles, decayingRamparts, creepsInRoom,
     for (var t = 0; t < orderedTowers.length; t++)
     {
         var tower = orderedTowers[t];
+        var maintenanceTarget = maintenanceTargets[maintenanceIndex];
         if (healBeforeAttack && healInfo && healInfo.target && healInfo.healNeed > 0)
         {
             tower.heal(healInfo.target);
@@ -2437,6 +2441,7 @@ function runTowerDefense(room, towers, hostiles, decayingRamparts, creepsInRoom,
         }
         else if (shouldTowerPerformMaintenance(room, tower, maintenanceTarget, hostiles))
         {
+            maintenanceIndex++;
             tower.repair(maintenanceTarget);
             summary.action = 'repairMaintenance';
             summary.repairTarget = maintenanceTarget.id;
@@ -4663,10 +4668,31 @@ function handleQuadSpawnPriority(spawn, request)
         return false;
     }
 
-    var candidates = getQuadSpawnCandidates(request);
-    ensureAutoQuadRally(request, candidates);
-    candidates = getQuadSpawnCandidates(request);
-    prepareQuadMemory(request);
+    // Candidates and the rally can't change within a tick (spawns start next
+    // tick), so work them out once per squad rather than once per idle spawn.
+    var cache = getMainLoopCache() || {};
+    var cacheKey = 'quadSpawn:' + request.squad;
+    var cached = cache[cacheKey];
+    if (!cached)
+    {
+        var candidates = getQuadSpawnCandidates(request);
+        ensureAutoQuadRally(request, candidates);
+        candidates = getQuadSpawnCandidates(request);
+        cached = cache[cacheKey] = {
+            candidates: candidates,
+            rallyPos: request.rallyPos,
+            rallyRoom: request.rallyRoom,
+            autoRallySelected: request.autoRallySelected
+        };
+        prepareQuadMemory(request);
+    }
+    else
+    {
+        request.rallyPos = cached.rallyPos;
+        request.rallyRoom = cached.rallyRoom;
+        request.autoRallySelected = cached.autoRallySelected;
+        candidates = cached.candidates;
+    }
     var missingSlots = getMissingQuadSlots(request.squad);
     if (missingSlots.length == 0)
     {
@@ -4829,6 +4855,20 @@ module.exports.loop = function () {
             delete Memory.creeps[creepName];
         }
     }
+    // Squad memory outlives its creeps. Drop it once nothing has run the squad
+    // (lastRun) or planned its spawn (spawnPlanAt) for 1500 ticks.
+    if (Memory.quads && Game.time % 100 == 0)
+    {
+        for (let squad in Memory.quads)
+        {
+            let squadMemory = Memory.quads[squad] || {};
+            if (countLiveQuadMembers(squad) == 0
+                && Game.time - Math.max(squadMemory.lastRun || 0, squadMemory.spawnPlanAt || 0) > 1500)
+            {
+                delete Memory.quads[squad];
+            }
+        }
+    }
     for (let spawnName in Game.spawns)
     {
         ensureSpawnMemoryDefaults(Game.spawns[spawnName]);
@@ -4961,6 +5001,12 @@ module.exports.loop = function () {
         let spawn = Game.spawns[spawnName];
         syncSameRoomSpawnMemory(spawn);
         cleanupObsoleteSpawnMemory(spawn);
+        // A busy secondary spawn can't use this tick's plan; the primary already
+        // handles the room-level work (towers, safe mode, market, labs).
+        if (spawn.spawning && !isPrimaryRoomSpawn(spawn))
+        {
+            continue;
+        }
         let creepsInRoom = getRoomMyCreeps(spawn.room);
         if (isControllerDowngradeEmergency(spawn.room)
             && !spawn.spawning
@@ -5027,6 +5073,14 @@ module.exports.loop = function () {
                     {
                         Game.market.deal(order.id, amount, spawn.room.name);
                     }
+                }
+            }
+            // Fully filled orders only take up room toward the 300-order cap.
+            for (let id in Game.market.orders)
+            {
+                if (Game.market.orders[id].remainingAmount <= 0)
+                {
+                    Game.market.cancelOrder(id);
                 }
             }
             combatBoostMarket.maintain(spawn);
@@ -5116,7 +5170,11 @@ module.exports.loop = function () {
         var hLab1 = boostLabs.healer;
         var uBody = undefined;
         var hBody = undefined;
-        if (spawn.room.terminal && nU > 0 && uLab1)
+        // Only pull upgraders to the lab when it can actually boost them, and only
+        // once per room: a lab with leftover XGH2O kept dragging them off the controller.
+        if (isPrimaryRoomSpawn(spawn) && spawn.room.terminal && nU > 0 && uLab1
+            && uLab1.store.getUsedCapacity(RESOURCE_CATALYZED_GHODIUM_ACID) >= LAB_BOOST_MINERAL
+            && uLab1.store.getUsedCapacity(RESOURCE_ENERGY) >= LAB_BOOST_ENERGY)
         {
             uBody = [];
             for (let creep of creepsInRoom)
@@ -5153,7 +5211,7 @@ module.exports.loop = function () {
                     {
                         creep.moveTo(uLab1);
                     }
-                    else if (boostResult == OK)
+                    else if (boostResult == OK || boostResult == ERR_NOT_FOUND)
                     {
                         creep.memory.boosted = true;
                     }
@@ -5221,7 +5279,10 @@ module.exports.loop = function () {
         {
             continue;
         }
-        if (playerHostiles.length >= 1 && nDefenders == 0)
+        // Scouts and passing haulers are tower food; only armed, healing, WORK or
+        // CLAIM player creeps are worth a defender and its healer.
+        var dangerousPlayerHostiles = playerHostiles.filter(isDangerousTowerHostile);
+        if (dangerousPlayerHostiles.length >= 1 && nDefenders == 0)
         {
             name = recordSpawnAttempt(spawn,
                 spawn.createDefender(spawn.room.energyAvailable, spawn.room.name, makeCreepName(spawn, 'defender')),
@@ -5231,7 +5292,7 @@ module.exports.loop = function () {
                 continue;
             }
         }
-        if (playerHostiles.length >= 1 && nDefenders > nRoomHealers)
+        if (dangerousPlayerHostiles.length >= 1 && nDefenders > nRoomHealers)
         {
             name = recordSpawnAttempt(spawn,
                 spawn.createHealer(spawn.room.energyAvailable, spawn.room.name, makeCreepName(spawn, 'healer')),
@@ -5255,15 +5316,15 @@ module.exports.loop = function () {
                     spawn.createCustomCreep(spawn.room.energyAvailable, 'harvester', makeCreepName(spawn, 'harvester')),
                     'harvester');
             }
-            else if (nH == 0 && nM > 0 && nL == 0)
+            else if (nH == 0 && (nM > 0 || nSLinkers > 0) && nL == 0)
             {
-                // Absolute hauler recovery: if miners exist but hauling is gone,
+                // Absolute hauler recovery: if miners or SLinkers exist but hauling is gone,
                 // spawn an affordable lorry before waiting for the normal target body.
                 name = recordSpawnAttempt(spawn,
                     spawn.createLorry(spawn.room.energyAvailable, 'lorry', makeCreepName(spawn, 'lorry')),
                     'lorry');
             }
-            else if (nH == 0 && nM == 0
+            else if (nH == 0 && nM == 0 && nSLinkers == 0
                 && (!containerSetupReady || !canSpawnMiner || spawn.room.energyAvailable < minerBodyCost))
             {
                 // Bootstrap/collapse recovery only. In mature rooms that can spawn
@@ -5371,7 +5432,8 @@ module.exports.loop = function () {
             else if (nHealers < spawn.memory.minHealers)
             {
                 name = recordSpawnAttempt(spawn,
-                    spawn.createHealer(energy, spawn.memory.attackRoom, makeCreepName(spawn, 'Healer')),
+                    spawn.createHealer(energy, spawn.memory.attackRoom, makeCreepName(spawn, 'Healer'),
+                        spawn.memory.attackAvoidRooms),
                     'healer');
             }
             else if (nSLinkers < whiteFlags && slinkerSourceId != undefined)
@@ -5568,6 +5630,22 @@ module.exports.loop = function () {
                 }
             }
         }
+    }
+    // Towers and auto safe mode normally run with each room's primary spawn. Catch
+    // owned rooms that skipped that: no living spawn (e.g. under siege), or a
+    // primary spawn that took the emergency-upgrader `continue`.
+    for (let roomName in Game.rooms)
+    {
+        let room = Game.rooms[roomName];
+        if (!room.controller || !room.controller.my
+            || (global.towerDefenseRunTick == Game.time && global.towerDefenseRunRooms[roomName]))
+        {
+            continue;
+        }
+        let roomHostiles = getRoomHostileInfo(room).hostiles;
+        triggerAutoSafeMode(room, getRoomPrimarySpawn(room), roomHostiles);
+        let roomDecaying = getRoomOwnedRamparts(room).filter((r) => r.hits < TOWER_RAMPART_DECAY_BUFFER_HITS);
+        runTowerDefense(room, getCachedRoomPlan(room).towers, roomHostiles, roomDecaying, getRoomMyCreeps(room), []);
     }
     // Read-only unless explicitly configured; run once per room after defense
     // telemetry and spawn decisions, not once for each same-room spawn.

@@ -2,12 +2,59 @@ var WINDOW_TICKS = 1500;
 var MAX_STUCK_CREEPS = 10;
 var MAX_STUCK_SITES = 12;
 var MAX_STUCK_SITE_BLOCKERS = 6;
+var MAX_HISTORY_STUCK_SITES = 5;
+var MAX_HISTORY_SITE_BLOCKERS = 2;
 var MAX_SUMMARY_BUCKETS = 5;
 var STUCK_REPORT_TICKS = 3;
 
 function isEnabled()
 {
     return Memory.trafficStatsEnabled == true;
+}
+
+// Records the direction each creep committed to this tick. moveTo() and
+// moveByPath() both end in this.move(), so cached-path ticks are seen too;
+// memory._move.time only changes on ticks where moveTo() re-paths. Shared
+// with traffic.flow; the store lives on the prototype so the wrapper and the
+// readers always agree, and the wrapper is installed once per prototype.
+function installMoveHook()
+{
+    if (typeof Creep == 'undefined' || !Creep.prototype || Creep.prototype.__trafficMoveStore)
+    {
+        return;
+    }
+    var store = { tick: -1, dirs: {} };
+    var originalMove = Creep.prototype.move;
+    Object.defineProperty(Creep.prototype, '__trafficMoveStore', { value: store });
+    Creep.prototype.move = function(target)
+    {
+        var result = originalMove.apply(this, arguments);
+        if (result == OK)
+        {
+            if (store.tick != Game.time)
+            {
+                store.tick = Game.time;
+                store.dirs = {};
+            }
+            // move(creep) is a pull-follow: a real intent, but no known direction.
+            store.dirs[this.name] = typeof target == 'object' ? 0 : +target;
+        }
+        return result;
+    };
+}
+
+// Direction (1-8) of this tick's accepted move intent, 0 for a pull-follow,
+// undefined when move() was not called or returned an error.
+function getMoveDirection(creep)
+{
+    var store = typeof Creep != 'undefined' && Creep.prototype
+        ? Creep.prototype.__trafficMoveStore
+        : undefined;
+    if (!store || !creep || store.tick != Game.time)
+    {
+        return undefined;
+    }
+    return store.dirs[creep.name];
 }
 
 function copyNumericFields(source)
@@ -111,49 +158,6 @@ function summarizeBlockers(blockers, limit)
     return out;
 }
 
-function summarizeStuckCreeps(creeps)
-{
-    var rows = [];
-    for (var name in creeps || {})
-    {
-        var entry = creeps[name];
-        if (entry)
-        {
-            rows.push({
-                name: name,
-                score: (entry.samples || 0) * 100 + (entry.maxStuckTicks || entry.stuckTicks || 0),
-                entry: entry
-            });
-        }
-    }
-    rows.sort(function(a, b) {
-        if (b.score != a.score)
-        {
-            return b.score - a.score;
-        }
-        return (b.entry.updated || 0) - (a.entry.updated || 0);
-    });
-    var out = {};
-    for (var i = 0; i < rows.length && i < MAX_STUCK_CREEPS; i++)
-    {
-        var e = rows[i].entry;
-        out[rows[i].name] = {
-            role: e.role,
-            roomName: e.roomName,
-            x: e.x,
-            y: e.y,
-            fatigue: e.fatigue || 0,
-            stuckTicks: e.stuckTicks || 0,
-            maxStuckTicks: e.maxStuckTicks || e.stuckTicks || 0,
-            samples: e.samples || 0,
-            dest: e.dest,
-            updated: e.updated,
-            blockers: e.blockers || []
-        };
-    }
-    return out;
-}
-
 function summarizeStuckSites(sites)
 {
     var rows = [];
@@ -177,7 +181,7 @@ function summarizeStuckSites(sites)
         return (b.entry.updated || 0) - (a.entry.updated || 0);
     });
     var out = {};
-    for (var i = 0; i < rows.length && i < MAX_STUCK_SITES; i++)
+    for (var i = 0; i < rows.length && i < MAX_HISTORY_STUCK_SITES; i++)
     {
         var e = rows[i].entry;
         out[rows[i].key] = {
@@ -191,8 +195,7 @@ function summarizeStuckSites(sites)
             lastDest: e.lastDest,
             updated: e.updated,
             roles: topCountBucket(e.roles, 4),
-            blockers: summarizeBlockers(e.blockers, MAX_STUCK_SITE_BLOCKERS),
-            lastBlockers: e.lastBlockers || []
+            blockers: summarizeBlockers(e.blockers, MAX_HISTORY_SITE_BLOCKERS)
         };
     }
     return out;
@@ -217,7 +220,8 @@ function makeSummary(stats)
         topStuckRooms: topNumericBucket(stats.rooms, 'stuckTicks', MAX_SUMMARY_BUCKETS),
         topFatigueRoles: topNumericBucket(stats.roles, 'fatigueTicks', MAX_SUMMARY_BUCKETS),
         topFatigueRooms: topNumericBucket(stats.rooms, 'fatigueTicks', MAX_SUMMARY_BUCKETS),
-        stuckCreeps: summarizeStuckCreeps(stats.stuckCreeps),
+        // History is parsed/serialized with Memory every tick: keep it compact.
+        // Stuck creeps from a closed window are mostly dead, so they are dropped.
         stuckSites: summarizeStuckSites(stats.stuckSites)
     };
 }
@@ -287,6 +291,7 @@ function beginTick()
     {
         return;
     }
+    installMoveHook();
     var stats = ensureStats();
     ensureScratch();
     if (stats.lastTick != Game.time)
@@ -329,15 +334,12 @@ function hasMoveIntentFromState(state)
 
 function hasMoveIntent(creep)
 {
-    return !!(creep.memory
-        && creep.memory._move
-        && creep.memory._move.dest
-        && creep.memory._move.time == Game.time);
+    return getMoveDirection(creep) > 0;
 }
 
 function getMoveDestKey(creep)
 {
-    if (!hasMoveIntent(creep))
+    if (!hasMoveIntent(creep) || !creep.memory || !creep.memory._move || !creep.memory._move.dest)
     {
         return undefined;
     }
@@ -794,5 +796,7 @@ module.exports = {
     observeCreepBefore: observeCreepBefore,
     observeCreepAfter: observeCreepAfter,
     endTick: endTick,
-    isEnabled: isEnabled
+    isEnabled: isEnabled,
+    installMoveHook: installMoveHook,
+    getMoveDirection: getMoveDirection
 };

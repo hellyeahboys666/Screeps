@@ -60,6 +60,11 @@ var roleExtractor = {
         {
             creep.memory.empty = true;
         }
+        else if (creep.memory.empty == true && mineral.mineralAmount == 0)
+        {
+            // Mineral exhausted mid-load: bank the partial load.
+            creep.memory.empty = false;
+        }
         if(creep.memory.empty == true) 
         {
             var target = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, 

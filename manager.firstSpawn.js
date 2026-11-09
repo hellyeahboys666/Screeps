@@ -58,7 +58,14 @@ function run(room, request, deps) {
     if (typeof builder !== 'object' || Array.isArray(builder)) return {status: 'ineligible'};
     const state = builder.firstSpawn || (builder.firstSpawn = {});
     if (typeof state !== 'object' || Array.isArray(state)) return {status: 'ineligible'};
-    if (state.siteName) return outcome(state, 'awaitingSiteReadback');
+    if (state.siteName) {
+        // A placed site shows up the next tick. If it's still missing after that,
+        // it was stomped or never created: forget it and plan again.
+        if (Game.time - state.lastAttemptTick <= 1) return outcome(state, 'awaitingSiteReadback');
+        delete state.siteName;
+        delete state.sitePos;
+        state.signature = null;
+    }
     const hostiles = room.find(FIND_HOSTILE_CREEPS);
     const powerHostiles = typeof FIND_HOSTILE_POWER_CREEPS === 'undefined'
         ? [] : room.find(FIND_HOSTILE_POWER_CREEPS);
@@ -85,6 +92,12 @@ function run(room, request, deps) {
     state.lastRunTick = Game.time;
     if (!Game.cpu || !Number.isFinite(Game.cpu.bucket)
         || Game.cpu.bucket < MIN_PLANNING_BUCKET) return outcome(state, 'paused', 'lowBucket');
+    // Once ranking is done, only re-survey now and then while just observing.
+    if ((state.status === 'rejected' || (state.status === 'observing' && request.mode !== 'place'))
+        && Number.isInteger(state.lastSurveyTick) && Game.time - state.lastSurveyTick < 100) {
+        return {status: state.status};
+    }
+    state.lastSurveyTick = Game.time;
     if (!deps || !deps.survey || !deps.firstSpawn
         || typeof deps.survey.survey !== 'function'
         || typeof deps.firstSpawn.rankCandidates !== 'function'

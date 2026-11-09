@@ -8,6 +8,7 @@ var FAST_REMOTE_HARVESTER_WORK_PARTS = 5;
 var FAST_REMOTE_HARVESTER_TARGET_MOVE_PARTS = 3;
 var FAST_REMOTE_HARVESTER_MIN_MOVE_PARTS = 2;
 var DEFAULT_REMOTE_OWNER_MEMORY_KEY = 'defaultRemoteOwner';
+var REMOTE_BLOCKED_MEMORY_TICKS = 1500;
 var remoteCreepIndexTick;
 var remoteCreepIndex;
 
@@ -178,9 +179,34 @@ function hasViableRemoteReserver(spawn, roomName)
     return getRemoteHomeCreepIndex(spawn.room.name).viableReserversByTarget[roomName] == true;
 }
 
+// Harvesting is blocked (ERR_NOT_OWNER) while another user, including an
+// Invader core, reserves or owns the remote. Remember the last sighting so a
+// loss of vision does not immediately send fresh creeps into the same room.
+function isRemoteBlockedByOther(spawn, roomName)
+{
+    var status = getRemoteReservationStatus(spawn, roomName);
+    if (!spawn.memory.remoteBlockedSeen)
+    {
+        spawn.memory.remoteBlockedSeen = {};
+    }
+    var seen = spawn.memory.remoteBlockedSeen;
+    if (status.visible)
+    {
+        if (!status.canReserve && status.reason != 'ownedByUs')
+        {
+            seen[roomName] = Game.time;
+            return true;
+        }
+        delete seen[roomName];
+        return false;
+    }
+    return seen[roomName] != undefined
+        && Game.time - seen[roomName] < REMOTE_BLOCKED_MEMORY_TICKS;
+}
+
 function shouldSpawnRemoteReserver(spawn, roomName, reserveStatus)
 {
-    if (!reserveStatus.canReserve)
+    if (!reserveStatus.canReserve || isRemoteBlockedByOther(spawn, roomName))
     {
         return false;
     }
@@ -622,6 +648,8 @@ function shouldRetireObsoleteDefaultRemoteHarvester(creep)
     for (let other of harvesters)
     {
         if (other.name != creep.name
+            && !other.spawning
+            && (!other.pos || other.pos.roomName == E9S17_REMOTE_ROOM)
             && other.memory.reserved == true
             && getLongDistanceHarvesterWorkParts(other) >= MIN_RESERVED_REMOTE_HARVESTER_WORK_PARTS)
         {
@@ -635,7 +663,8 @@ function getDefaultRemoteState(spawn)
 {
     var owner = getDefaultRemoteOwner();
     var isOwner = owner.name == spawn.name;
-    var active = isOwner && spawn.memory.minLDH_E11S23Source0 > 0;
+    var active = isOwner && spawn.memory.minLDH_E11S23Source0 > 0
+        && !isRemoteBlockedByOther(spawn, E9S17_REMOTE_ROOM);
     var reserved = isOwner && isRemoteReservedForUs(spawn, E9S17_REMOTE_ROOM);
     var harvesterTotalCount = isOwner
         ? countLongDistanceHarvesters(spawn, E9S17_REMOTE_ROOM, E9S17_REMOTE_SOURCE_ID)

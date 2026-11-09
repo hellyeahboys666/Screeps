@@ -41,6 +41,50 @@ function isOnExitEdge(creep, exit)
         || (exit == FIND_EXIT_LEFT && creep.pos.x == 0);
 }
 
+// Route and exit tile change only when the creep changes room, so look them up
+// once per room visit instead of every tick; by path so an exit segment walled
+// off from the creep is never picked.
+function getTravelExit(creep, targetRoom)
+{
+    var travel = creep.memory.travelExit;
+    if (travel && travel.room == creep.room.name && travel.target == targetRoom
+        && travel.time >= Game.time - 1)
+    {
+        travel.time = Game.time;
+        return travel;
+    }
+    travel = {room: creep.room.name, target: targetRoom, time: Game.time};
+    var route;
+    if (creep.memory.avoidRooms != undefined)
+    {
+        var avoidRooms = Array.isArray(creep.memory.avoidRooms) ? creep.memory.avoidRooms : [creep.memory.avoidRooms];
+        route = Game.map.findRoute(creep.room.name, targetRoom,
+        {
+            routeCallback: function(roomName)
+            {
+                return avoidRooms.indexOf(roomName) >= 0 ? Infinity : 1;
+            }
+        });
+    }
+    else
+    {
+        route = Game.map.findRoute(creep.room.name, targetRoom);
+    }
+    if (Array.isArray(route) && route.length > 0)
+    {
+        travel.exit = route[0].exit;
+        var exitPos = creep.pos.findClosestByPath(travel.exit)
+            || creep.pos.findClosestByRange(travel.exit);
+        if (exitPos)
+        {
+            travel.x = exitPos.x;
+            travel.y = exitPos.y;
+        }
+    }
+    creep.memory.travelExit = travel;
+    return travel;
+}
+
 function isCombatSupportTarget(creep)
 {
     return creep && creep.memory
@@ -93,10 +137,17 @@ module.exports = {
         }
         if (targetRoom && creep.room.name != targetRoom)
         {
-            const route = Game.map.findRoute(creep.room.name, targetRoom);
-            if (Array.isArray(route) && route.length > 0) 
+            // heal runs alongside move, so keep healing while travelling.
+            var hurt = creep.hits < creep.hitsMax ? creep
+                : creep.pos.findInRange(FIND_MY_CREEPS, 1, {filter: (c) => c.hits < c.hitsMax})[0];
+            if (hurt)
             {
-                const exitType = route[0].exit;
+                creep.heal(hurt);
+            }
+            const travel = getTravelExit(creep, targetRoom);
+            if (travel.exit != undefined)
+            {
+                const exitType = travel.exit;
                 const exitDirection = getExitMoveDirection(exitType);
                 if (exitDirection && isOnExitEdge(creep, exitType))
                 {
@@ -104,7 +155,7 @@ module.exports = {
                     return;
                 }
 
-                const exit = creep.pos.findClosestByRange(exitType);
+                const exit = travel.x != undefined ? new RoomPosition(travel.x, travel.y, creep.room.name) : undefined;
                 if (exit)
                 {
                     if (exitDirection && exit.isEqualTo(creep.pos))

@@ -1,3 +1,5 @@
+var trafficStats = require('traffic.stats');
+
 var WINDOW_TICKS = 1500;
 var MAX_LAST_CONFLICTS = 10;
 var MAX_LAST_UNRESOLVED = 10;
@@ -248,6 +250,7 @@ function beginTick()
     {
         return;
     }
+    trafficStats.installMoveHook();
     getState();
     var stats = ensureStats();
     if (stats.lastTick != Game.time)
@@ -330,6 +333,20 @@ function isWalkablePosition(room, pos, roomState)
             }
         }
     }
+    // Own construction sites of obstacle types block our own creeps too.
+    if (walkable && pos.lookFor && typeof LOOK_CONSTRUCTION_SITES != 'undefined'
+        && typeof OBSTACLE_OBJECT_TYPES != 'undefined')
+    {
+        var sites = pos.lookFor(LOOK_CONSTRUCTION_SITES);
+        for (let site of sites)
+        {
+            if (site.my && OBSTACLE_OBJECT_TYPES.indexOf(site.structureType) >= 0)
+            {
+                walkable = false;
+                break;
+            }
+        }
+    }
     roomState.walkableCache[key] = walkable;
     return walkable;
 }
@@ -352,6 +369,7 @@ function ensureRoomState(room)
         yieldDestByName: {},
         assignedYields: [],
         walkableCache: {},
+        blocked: {},
         resolved: false
     };
     var findType = typeof FIND_CREEPS != 'undefined' ? FIND_CREEPS : FIND_MY_CREEPS;
@@ -365,28 +383,22 @@ function ensureRoomState(room)
             pinned: creep.my != true || isPinned(creep)
         };
     }
+    // Power creeps are movement obstacles but are not returned by FIND_CREEPS.
+    if (typeof FIND_POWER_CREEPS != 'undefined')
+    {
+        var powerCreeps = room.find(FIND_POWER_CREEPS);
+        for (let powerCreep of powerCreeps)
+        {
+            roomState.occupants[packPos(powerCreep.pos)] = {
+                name: powerCreep.name,
+                role: 'powerCreep',
+                my: powerCreep.my == true,
+                pinned: true
+            };
+        }
+    }
     state.roomStates[room.name] = roomState;
     return roomState;
-}
-
-function getMoveDest(creep)
-{
-    if (!creep.memory
-        || !creep.memory._move
-        || !creep.memory._move.dest
-        || creep.memory._move.time != Game.time)
-    {
-        return undefined;
-    }
-    var dest = creep.memory._move.dest;
-    var x = Math.floor(dest.x);
-    var y = Math.floor(dest.y);
-    var roomName = dest.room || dest.roomName || creep.room.name;
-    if (!isRoomCoord(x, y))
-    {
-        return undefined;
-    }
-    return new RoomPosition(x, y, roomName);
 }
 
 function getPositionInDirection(pos, direction)
@@ -414,15 +426,6 @@ function getPositionInDirection(pos, direction)
         return undefined;
     }
     return new RoomPosition(pos.x + dx, pos.y + dy, pos.roomName);
-}
-
-function getPredictedNextPos(creep, dest)
-{
-    if (!dest || dest.roomName != creep.room.name || dest.isEqualTo(creep.pos))
-    {
-        return undefined;
-    }
-    return getPositionInDirection(creep.pos, creep.pos.getDirectionTo(dest));
 }
 
 function getFlowPriority(creep)
@@ -563,19 +566,20 @@ function observeCreep(creep)
     inc(roleStats, 'eligibleTicks');
     inc(roomStats, 'eligibleTicks');
 
-    var dest = getMoveDest(creep);
-    if (!dest)
+    // The direction actually issued this tick (fresh path, cached path or a
+    // direct move()); memory._move only reflects ticks that re-pathed.
+    var moveDir = trafficStats.getMoveDirection(creep);
+    if (!moveDir)
     {
-        registerIdleEligibleCreep(stats, creep);
+        // 0 is a pull-follow: the creep is moving, so never offer it as a yielder.
+        if (moveDir !== 0)
+        {
+            registerIdleEligibleCreep(stats, creep);
+        }
         recordSkip(stats, creep, 'skippedNoIntentTicks');
         return;
     }
-    if (dest.roomName != creep.room.name)
-    {
-        recordSkip(stats, creep, 'skippedRemoteIntentTicks');
-        return;
-    }
-    var nextPos = getPredictedNextPos(creep, dest);
+    var nextPos = getPositionInDirection(creep.pos, moveDir);
     if (!nextPos || isRoomEdge(nextPos))
     {
         recordSkip(stats, creep, 'skippedEdgeTicks');
@@ -665,7 +669,7 @@ function findIdleYieldKey(roomState, idle, assigned, reserved)
                 continue;
             }
             var occupant = roomState.occupants[key];
-            if (occupant && !assigned[occupant.name])
+            if (occupant && (!assigned[occupant.name] || roomState.blocked[occupant.name]))
             {
                 continue;
             }
@@ -716,7 +720,8 @@ function findResolutionChain(roomState, name, assigned, reserved, stack, depth)
     }
     if (assigned[occupant.name])
     {
-        return [name];
+        // Unresolved intents are assigned too, but they do not vacate.
+        return roomState.blocked[occupant.name] ? undefined : [name];
     }
     if (stack[occupant.name])
     {
@@ -932,6 +937,7 @@ function runObserveResolverForRoom(roomState, stats)
         else
         {
             assigned[intent.name] = true;
+            roomState.blocked[intent.name] = true;
             recordHypotheticalResolution(stats, intent, false, 0);
         }
     }

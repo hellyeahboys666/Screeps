@@ -87,7 +87,7 @@ function isSourceAccessDropSpot(pos)
     return pos.findInRange(FIND_SOURCES, 1).length > 0;
 }
 
-function isWalkableDropSpot(pos)
+function isWalkableDropSpot(pos, skipCreeps)
 {
     var room = Game.rooms[pos.roomName];
     if (!room || pos.x <= 0 || pos.x >= 49 || pos.y <= 0 || pos.y >= 49)
@@ -98,7 +98,7 @@ function isWalkableDropSpot(pos)
     {
         return false;
     }
-    if (isSourceAccessDropSpot(pos) || isReservedWorkerDropSpot(pos))
+    if (isSourceAccessDropSpot(pos) || (!skipCreeps && isReservedWorkerDropSpot(pos)))
     {
         return false;
     }
@@ -280,10 +280,23 @@ function getSpawnDropPos(room)
     if (remembered
         && rememberedMemory.version == SPAWN_DROP_SPOT_VERSION
         && remembered.roomName == room.name
-        && isWalkableDropSpot(remembered))
+        && isWalkableDropSpot(remembered, true))
     {
-        spawnDropPosCache[room.name] = {tick: Game.time, pos: remembered};
-        return remembered;
+        // A worker passing over the spot must not trigger the expensive
+        // re-scan; only re-choose once it has been occupied for a while.
+        if (isReservedWorkerDropSpot(remembered))
+        {
+            rememberedMemory.blockedSince = rememberedMemory.blockedSince || Game.time;
+        }
+        else
+        {
+            delete rememberedMemory.blockedSince;
+        }
+        if (!rememberedMemory.blockedSince || Game.time - rememberedMemory.blockedSince < 50)
+        {
+            spawnDropPosCache[room.name] = {tick: Game.time, pos: remembered};
+            return remembered;
+        }
     }
     if (room.memory.spawnEnergyDropSpot)
     {

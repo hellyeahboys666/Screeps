@@ -69,6 +69,35 @@ var roleDefender = {
                 || (exit == FIND_EXIT_LEFT && creep.pos.x == 0);
         }
 
+        // Route and exit tile change only when the creep changes room, so look
+        // them up once per room visit instead of every tick; by path so an exit
+        // segment walled off from the creep is never picked.
+        function getTravelExit()
+        {
+            var travel = creep.memory.travelExit;
+            if (travel && travel.room == creep.room.name && travel.target == targetRoom
+                && travel.time >= Game.time - 1)
+            {
+                travel.time = Game.time;
+                return travel;
+            }
+            travel = {room: creep.room.name, target: targetRoom, time: Game.time};
+            var route = Game.map.findRoute(creep.room.name, targetRoom);
+            if (Array.isArray(route) && route.length > 0)
+            {
+                travel.exit = route[0].exit;
+                var exitPos = creep.pos.findClosestByPath(travel.exit)
+                    || creep.pos.findClosestByRange(travel.exit);
+                if (exitPos)
+                {
+                    travel.x = exitPos.x;
+                    travel.y = exitPos.y;
+                }
+            }
+            creep.memory.travelExit = travel;
+            return travel;
+        }
+
         function closestHostile(filter)
         {
             return creep.pos.findClosestByPath(FIND_HOSTILE_CREEPS,
@@ -188,12 +217,35 @@ var roleDefender = {
 
         function getSafeAnchor()
         {
+            // Skip ramparts the defender cannot stand on: ones covering a
+            // spawn/tower/storage, or already occupied by another creep.
+            var blocked = {};
+            var structures = creep.room.find(FIND_STRUCTURES);
+            for (var i=0; i<structures.length; i++)
+            {
+                if (OBSTACLE_OBJECT_TYPES.indexOf(structures[i].structureType) >= 0)
+                {
+                    blocked[structures[i].pos.x * 50 + structures[i].pos.y] = true;
+                }
+            }
+            var creeps = creep.room.find(FIND_CREEPS);
+            for (var c=0; c<creeps.length; c++)
+            {
+                if (creeps[c].id != creep.id)
+                {
+                    blocked[creeps[c].pos.x * 50 + creeps[c].pos.y] = true;
+                }
+            }
+            function isOpenRampart(s)
+            {
+                return s.structureType == STRUCTURE_RAMPART && !blocked[s.pos.x * 50 + s.pos.y];
+            }
             var rampart = creep.pos.findClosestByPath(FIND_MY_STRUCTURES,
             {
-                filter: function(s) { return s.structureType == STRUCTURE_RAMPART; }
+                filter: isOpenRampart
             }) || creep.pos.findClosestByRange(FIND_MY_STRUCTURES,
             {
-                filter: function(s) { return s.structureType == STRUCTURE_RAMPART; }
+                filter: isOpenRampart
             });
             if (rampart)
             {
@@ -228,10 +280,10 @@ var roleDefender = {
         if (targetRoom && creep.room.name != targetRoom)
         {
             clearDefenseTarget();
-            var route = Game.map.findRoute(creep.room.name, targetRoom);
-            if (Array.isArray(route) && route.length > 0)
+            var travel = getTravelExit();
+            if (travel.exit != undefined)
             {
-                var exitType = route[0].exit;
+                var exitType = travel.exit;
                 var exitDirection = getExitMoveDirection(exitType);
                 if (exitDirection && isOnExitEdge(creep, exitType))
                 {
@@ -239,7 +291,7 @@ var roleDefender = {
                     return;
                 }
 
-                var exit = creep.pos.findClosestByRange(exitType);
+                var exit = travel.x != undefined ? new RoomPosition(travel.x, travel.y, creep.room.name) : undefined;
                 if (exit)
                 {
                     if (exitDirection && exit.isEqualTo(creep.pos))

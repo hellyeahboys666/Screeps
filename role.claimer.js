@@ -87,17 +87,32 @@ module.exports = {
         if (creep.room.name != creep.memory.target)
         {
             var avoidRooms = getAvoidRooms(creep);
-            var route = Game.map.findRoute(creep.room.name, creep.memory.target,
+            // Only the first exit is used, so route once per room instead of per tick.
+            var routeKey = creep.room.name + '>' + creep.memory.target + '|' + avoidRooms.join(',');
+            var cachedExit = creep.memory._exitCache;
+            var route = undefined;
+            if (cachedExit && cachedExit.key == routeKey)
             {
-                routeCallback: function(roomName)
+                route = [{exit: cachedExit.exit}];
+            }
+            else
+            {
+                route = Game.map.findRoute(creep.room.name, creep.memory.target,
                 {
-                    if (avoidRooms.indexOf(roomName) >= 0)
+                    routeCallback: function(roomName)
                     {
-                        return Infinity;
+                        if (avoidRooms.indexOf(roomName) >= 0)
+                        {
+                            return Infinity;
+                        }
+                        return 1;
                     }
-                    return 1;
+                });
+                if (Array.isArray(route) && route.length > 0)
+                {
+                    creep.memory._exitCache = {key: routeKey, exit: route[0].exit};
                 }
-            });
+            }
 
             if (Array.isArray(route) && route.length > 0)
             {

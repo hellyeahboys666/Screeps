@@ -79,6 +79,28 @@ function isOnExitEdge(creep, exit)
         || (exit == FIND_EXIT_LEFT && creep.pos.x == 0);
 }
 
+// A creep left idle on an exit tile is moved back into the neighbouring room.
+function stepOffEdge(creep)
+{
+    if (creep.pos.x == 0)
+    {
+        return creep.move(RIGHT) == OK;
+    }
+    if (creep.pos.x == 49)
+    {
+        return creep.move(LEFT) == OK;
+    }
+    if (creep.pos.y == 0)
+    {
+        return creep.move(BOTTOM) == OK;
+    }
+    if (creep.pos.y == 49)
+    {
+        return creep.move(TOP) == OK;
+    }
+    return false;
+}
+
 function moveToRoom(creep, roomName)
 {
     if (!roomName)
@@ -219,7 +241,7 @@ var rolelongDistanceHarvester = {
             {
                 moveToRoom(creep, creep.memory.home);
             }
-            else
+            else if (!stepOffEdge(creep))
             {
                 creep.say('danger');
             }

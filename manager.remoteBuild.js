@@ -16,6 +16,7 @@ var DEFAULT_ROAD_COVERAGE_THRESHOLD = 0.8;
 var ROAD_PROFILE_CHECK_INTERVAL = 503;
 var ROAD_PROFILE_MAX_ROOMS = 4;
 var ROAD_PROFILE_MAX_OPS = 2000;
+var spawnPlanCache = {tick: -1, byRoom: {}};
 
 function isObject(value)
 {
@@ -157,6 +158,7 @@ function getMissionFromMemory(key, raw, spawn)
 
     return {
         name: data.name || key || target,
+        raw: isObject(raw) ? raw : undefined,
         home: home,
         target: target,
         active: data.active != false,
@@ -330,6 +332,26 @@ function hasViableClaimer(mission)
         }
     }
     return false;
+}
+
+// claimController fails with ERR_GCL_NOT_ENOUGH at the GCL cap, so a claimer
+// spawned then would idle and be replaced forever.
+function canClaimAnotherRoom()
+{
+    if (!Game.gcl)
+    {
+        return true;
+    }
+    var ownedRooms = 0;
+    for (let roomName in Game.rooms)
+    {
+        let controller = Game.rooms[roomName].controller;
+        if (controller && controller.my)
+        {
+            ownedRooms++;
+        }
+    }
+    return Game.gcl.level > ownedRooms;
 }
 
 function getDangerousHostileCount(room)
@@ -865,7 +887,8 @@ function getMissionStatus(spawn, mission)
         && status.dangerousHostiles == 0
         && !controllerMy
         && !remoteBuildComplete
-        && !hasViableClaimer(mission);
+        && !hasViableClaimer(mission)
+        && canClaimAnotherRoom();
     status.desiredCarriers = getDesiredCarrierCount(mission, status);
     status.desiredBuilders = getDesiredBuilderCount(mission, status);
     status.needsCarrier = homeReady
@@ -981,8 +1004,41 @@ function writeStatusMemory(spawn, statuses)
     }
 }
 
+function pruneRoadProfiles()
+{
+    if (!Memory.remoteBuildRoadProfiles || Game.time % 500 != 0)
+    {
+        return;
+    }
+    // Live profiles are refreshed every ROAD_PROFILE_CHECK_INTERVAL ticks;
+    // anything older belongs to a removed mission, moved depot or old spawn key.
+    for (let key in Memory.remoteBuildRoadProfiles)
+    {
+        let entry = Memory.remoteBuildRoadProfiles[key];
+        if (!entry
+            || entry.nextCheck == undefined
+            || Game.time - entry.nextCheck > 2 * ROAD_PROFILE_CHECK_INTERVAL)
+        {
+            delete Memory.remoteBuildRoadProfiles[key];
+        }
+    }
+}
+
 function getSpawnPlan(spawn)
 {
+    // Every spawn in a room gets the same missions and status, so evaluate once
+    // per room per tick. main.js still guards same-tick duplicate spawns.
+    if (spawnPlanCache.tick != Game.time)
+    {
+        spawnPlanCache = {tick: Game.time, byRoom: {}};
+    }
+    if (spawnPlanCache.byRoom[spawn.room.name])
+    {
+        delete spawn.memory.remoteBuildMissionStatus;
+        delete spawn.memory.remoteBuildMissionCount;
+        return spawnPlanCache.byRoom[spawn.room.name];
+    }
+
     var missions = getConfiguredMissions(spawn);
     var conditionalRooms = [];
     for (let mission of missions)
@@ -1010,6 +1066,19 @@ function getSpawnPlan(spawn)
     {
         let status = getMissionStatus(spawn, mission);
         statuses.push(status);
+        // Retire a finished mission once its creeps have converted or died, so it
+        // stops being evaluated every tick. Waiting for a spawn keeps first-spawn
+        // placement alive for an RCL6 completion without one.
+        if (status.remoteBuildComplete
+            && status.hasSpawn
+            && mission.raw
+            && status.claimerCount == 0
+            && status.remoteCarrierCount == 0
+            && status.remoteBuilderCount == 0)
+        {
+            mission.raw.active = false;
+            mission.raw.completedAt = Game.time;
+        }
         if (!plan.claimerRequest && status.needsClaimer)
         {
             plan.claimerRequest = {
@@ -1073,6 +1142,8 @@ function getSpawnPlan(spawn)
     }
 
     writeStatusMemory(spawn, statuses);
+    pruneRoadProfiles();
+    spawnPlanCache.byRoom[spawn.room.name] = plan;
     return plan;
 }
 

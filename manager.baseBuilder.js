@@ -127,7 +127,13 @@ function run(room, deps) {
         return result(state, 'observing');
     }
     if (state.generatedTick >= Game.time) return result(state, 'planned');
+    // A finished plan, or one waiting on RCL caps, only needs a look every 50 ticks.
+    if ((state.status === 'complete' || state.status === 'deferred')
+        && Number.isInteger(state.lastExecuteTick) && Game.time - state.lastExecuteTick < 50) {
+        return {status: state.status};
+    }
     state.lastRunTick = Game.time;
+    state.lastExecuteTick = Game.time;
     var pauseUntil = Math.max(Number.isInteger(config.pauseUntil) ? config.pauseUntil : -1,
         Number.isInteger(state.pauseUntil) ? state.pauseUntil : -1);
     var placement = deps.executor.execute(room, state.plan, {

@@ -59,6 +59,8 @@ const game = {
 const sandbox = {
     module: {exports: {}},
     exports: {},
+    // No spawn drop spot in this room.
+    require: (name) => (name == 'energy.fallback' ? {getSpawnDropPos: () => undefined} : undefined),
     Game: game,
     global: {},
     RoomPosition,

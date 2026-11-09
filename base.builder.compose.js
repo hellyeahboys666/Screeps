@@ -60,6 +60,15 @@ function compose(input, deps, options) {
     }
     if (roads.blockers.length) critical.push.apply(critical, roads.blockers);
     var base = core.entries.concat(infraEntries, roads.entries);
+    // Drop advanced infrastructure that blocks access before extensions are
+    // planned around it; otherwise every extension gets popped for nothing.
+    var infraBlocked = infraEntries.length ? validateAccess(input, base) : null;
+    if (infraBlocked) {
+        warnings.push('advancedAccessDeferred:' + infraBlocked);
+        infraEntries = [];
+        roads = deps.paths.connectRoads(input, core.entries);
+        base = core.entries.concat(roads.entries);
+    }
     var expansion = deps.expansion.planExpansion(input, base);
     var extraEntries = expansion.entries || [];
     warnings.push.apply(warnings, expansion.blockers || []);

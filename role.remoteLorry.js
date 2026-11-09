@@ -89,6 +89,27 @@ function isOnExitEdge(creep, exit)
         || (exit == FIND_EXIT_LEFT && creep.pos.x == 0);
 }
 
+function stepOffEdge(creep)
+{
+    if (creep.pos.x == 0)
+    {
+        return creep.move(RIGHT) == OK;
+    }
+    if (creep.pos.x == 49)
+    {
+        return creep.move(LEFT) == OK;
+    }
+    if (creep.pos.y == 0)
+    {
+        return creep.move(BOTTOM) == OK;
+    }
+    if (creep.pos.y == 49)
+    {
+        return creep.move(TOP) == OK;
+    }
+    return false;
+}
+
 function moveToRoom(creep, roomName)
 {
     if (!roomName)
@@ -243,14 +264,6 @@ function getSourceAccessCostCallback(source)
     };
 }
 
-function clearCachedMove(creep)
-{
-    if (creep.memory && creep.memory._move)
-    {
-        delete creep.memory._move;
-    }
-}
-
 function isWalkableNonSourceAccess(pos, source)
 {
     if (!pos || pos.x <= 0 || pos.x >= 49 || pos.y <= 0 || pos.y >= 49)
@@ -356,7 +369,6 @@ function moveNearEnergyAvoidingSource(creep, target, source)
                 return;
             }
         }
-        clearCachedMove(creep);
         creep.moveTo(target, {
             range: 1,
             reusePath: 3,
@@ -379,7 +391,6 @@ function waitNearSourceWithoutBlocking(creep, source)
     }
     if (creep.pos.getRangeTo(source) > 2)
     {
-        clearCachedMove(creep);
         creep.moveTo(source, {
             range: 2,
             reusePath: 5,
@@ -623,12 +634,18 @@ var roleRemoteLorry = {
             if (creep.room.name != creep.memory.home)
             {
                 moveToRoom(creep, creep.memory.home);
+                return;
             }
-            else
+            if (creep.memory.empty == true)
             {
-                creep.say('danger');
+                // Idling on the exit tile would bounce the lorry back into danger.
+                if (!stepOffEdge(creep))
+                {
+                    creep.say('danger');
+                }
+                return;
             }
-            return;
+            // A loaded lorry is already home: fall through and deliver.
         }
 
         if (creep.memory.empty == true)
@@ -666,7 +683,17 @@ var roleRemoteLorry = {
             return;
         }
 
-        var sink = findHomeEnergySink(creep);
+        // Reuse the chosen sink briefly; re-ranking every tick costs path searches.
+        var sink = creep.memory.sinkId ? Game.getObjectById(creep.memory.sinkId) : null;
+        if (!sink
+            || !sink.store
+            || sink.store.getFreeCapacity(RESOURCE_ENERGY) <= 0
+            || (creep.memory.sinkUntil || 0) < Game.time)
+        {
+            sink = findHomeEnergySink(creep);
+            creep.memory.sinkId = sink ? sink.id : undefined;
+            creep.memory.sinkUntil = Game.time + 10;
+        }
         if (sink)
         {
             if (creep.transfer(sink, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE)

@@ -199,6 +199,9 @@ function plan(input, seed = {entries: []}) {
                 if (!cluster.every(accessible)) continue;
                 // Preserve harvesting and upgrading paths when labs are completed.
                 if (!sources.every(s => accessible(s.pos)) || !accessible(input.controller.pos)) continue;
+                // ...and every structure planned so far (terminal, links) keeps a free neighbour.
+                if (!seed.entries.concat(entries).every(e => ['road', 'container', 'rampart', 'extractor'].includes(e.type)
+                    || accessible(e.pos))) continue;
                 selected = {a, b, outputs};
                 break outer;
             }

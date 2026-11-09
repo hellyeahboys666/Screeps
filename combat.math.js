@@ -159,7 +159,9 @@ function isHostileTower(structure, hostileStructureFilter)
     {
         return false;
     }
-    return structure.store && structure.store.getUsedCapacity(RESOURCE_ENERGY) > 0;
+    // A tower needs a full shot's worth of energy to fire at all.
+    var energyPerShot = typeof TOWER_ENERGY_COST == 'number' ? TOWER_ENERGY_COST : 10;
+    return structure.store && structure.store.getUsedCapacity(RESOURCE_ENERGY) >= energyPerShot;
 }
 
 function estimateHostileCreepRawDamage(hostile, target)

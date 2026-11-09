@@ -35,7 +35,10 @@ function findControllerUpgradeSink(creep)
         filter: (s) => s.structureType == STRUCTURE_CONTAINER
             && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
     });
-    var controllerLinks = sourceLinkUtils.findUsableControllerLinks(creep.room.controller);
+    // In builderPriority the Blinker drains the controller link back into
+    // storage, so refilling it would only loop energy through the link.
+    var controllerLinks = creep.room.memory.economyMode == 'builderPriority'
+        ? [] : sourceLinkUtils.findUsableControllerLinks(creep.room.controller);
     for (let link of controllerLinks)
     {
         if (link.store.getFreeCapacity(RESOURCE_ENERGY) > 0)
@@ -567,6 +570,35 @@ function findContainerLorryPickup(creep, canDrainNonControllerLinks, requireNoOt
     });
 }
 
+// Storage energy is only worth withdrawing when a non-storage sink will take it;
+// otherwise an idle lorry withdraws and returns the same load every tick.
+function hasNonStorageEnergySink(creep, roomUnderAttack)
+{
+    var room = creep.room;
+    if (room.energyAvailable < room.energyCapacityAvailable)
+    {
+        return true;
+    }
+    if (room.find(FIND_MY_STRUCTURES,
+    {
+        filter: (s) => s.structureType == STRUCTURE_TOWER
+            && s.store.getFreeCapacity(RESOURCE_ENERGY) >= 100
+    }).length > 0)
+    {
+        return true;
+    }
+    if (roomUnderAttack)
+    {
+        return false;
+    }
+    return !!(findLabEnergySink(creep, false)
+        || findSpecialStructureEnergySink(creep)
+        || (!needsStorageEnergyBuffer(room) && findControllerUpgradeSink(creep))
+        || (room.terminal
+            && room.terminal.store.getUsedCapacity(RESOURCE_ENERGY) < 10000
+            && room.terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+}
+
 var roleLorry = {
 
     /** @param {Creep} creep **/
@@ -588,8 +620,12 @@ var roleLorry = {
             var controllerLinks = sourceLinkUtils.findUsableControllerLinks(creep.room.controller);
             controllerLink = creep.pos.findClosestByRange(controllerLinks) || controllerLinks[0];
         }
+        // The full-controller-link guard only matters while a Clinker forwards
+        // base link energy to the controller link (none exist at RCL8).
         var canDrainNonControllerLinks = !controllerLink
-            || controllerLink.store.getFreeCapacity(RESOURCE_ENERGY) == 0;
+            || controllerLink.store.getFreeCapacity(RESOURCE_ENERGY) == 0
+            || creep.room.find(FIND_MY_CREEPS,
+                {filter: (c) => c.memory.role == 'Clinker'}).length == 0;
 
         var nonEnergyResource = getCarriedNonEnergyResource(creep);
         if (nonEnergyResource != undefined)
@@ -612,6 +648,7 @@ var roleLorry = {
             creep.memory.empty = true;
             delete creep.memory.storageRebalance;
             delete creep.memory.withdrawnFromStorage;
+            delete creep.memory.lorrySinkId;
         }
         else if (creep.memory.empty == true && shouldDeliverPartialLoad(creep))
         {
@@ -622,7 +659,9 @@ var roleLorry = {
         if(creep.memory.empty == true) {
             // During a live defense or while a quad is still being produced, refill
             // from the central stockpile before travelling to source-side pickups.
-            var priorityStorage = storagePickupPriority && findPriorityStoragePickup(storage);
+            var priorityStorage = storagePickupPriority
+                && hasNonStorageEnergySink(creep, roomUnderAttack)
+                && findPriorityStoragePickup(storage);
             if (priorityStorage)
             {
                 clearLorryPickup(creep);
@@ -667,7 +706,8 @@ var roleLorry = {
                 || findContainerLorryPickup(creep, canDrainNonControllerLinks, false);
             if (container == undefined && storage
                 && storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0
-                && !depotUtils.isRemoteBuildDepotEnergyStructure(storage))
+                && !depotUtils.isRemoteBuildDepotEnergyStructure(storage)
+                && hasNonStorageEnergySink(creep, roomUnderAttack))
             {
                 container = storage;
             }
@@ -690,16 +730,40 @@ var roleLorry = {
             }
             if (structure == undefined)
             {
-                structure = findClosestByPathOrRange(creep, FIND_MY_STRUCTURES, {
-                    filter: (s) => ((roomUnderAttack
-                                    && (s.structureType == STRUCTURE_TOWER
-                                        || s.structureType == STRUCTURE_EXTENSION))
-                                || (!roomUnderAttack
-                                    && (s.structureType == STRUCTURE_SPAWN
-                                        || s.structureType == STRUCTURE_EXTENSION
-                                        || s.structureType == STRUCTURE_TOWER)))
-                                && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-                });
+                // Keep walking to the last chosen sink instead of re-running
+                // findClosestByPath (and re-pathing moveTo) every tick.
+                var lastSink = creep.memory.lorrySinkId
+                    ? Game.getObjectById(creep.memory.lorrySinkId) : null;
+                if (lastSink
+                    && lastSink.pos.roomName == creep.room.name
+                    && lastSink.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+                    && (lastSink.structureType == STRUCTURE_EXTENSION
+                        || lastSink.structureType == STRUCTURE_TOWER
+                        || (!roomUnderAttack && lastSink.structureType == STRUCTURE_SPAWN)))
+                {
+                    structure = lastSink;
+                }
+                else
+                {
+                    structure = findClosestByPathOrRange(creep, FIND_MY_STRUCTURES, {
+                        filter: (s) => ((roomUnderAttack
+                                        && (s.structureType == STRUCTURE_TOWER
+                                            || s.structureType == STRUCTURE_EXTENSION))
+                                    || (!roomUnderAttack
+                                        && (s.structureType == STRUCTURE_SPAWN
+                                            || s.structureType == STRUCTURE_EXTENSION
+                                            || s.structureType == STRUCTURE_TOWER)))
+                                    && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+                    });
+                    if (structure)
+                    {
+                        creep.memory.lorrySinkId = structure.id;
+                    }
+                    else
+                    {
+                        delete creep.memory.lorrySinkId;
+                    }
+                }
             }
             if (structure == undefined
                 && creep.memory.storageRebalance

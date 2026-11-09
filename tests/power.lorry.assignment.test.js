@@ -220,10 +220,10 @@ function makePowerSpawn(power, freePower) {
     assert.equal(creep.memory.specialStructureId, powerSpawn.id);
 }
 
-// When processing consumes power, the same waiting loader must resume loading
-// from terminal/storage instead of causing a replacement spawn.
+// When processing has used up a batch of power, the same waiting loader must
+// resume loading from terminal/storage instead of causing a replacement spawn.
 {
-    const powerSpawn = makePowerSpawn(99, 1);
+    const powerSpawn = makePowerSpawn(50, 50);
     const lorryCalls = [];
     const role = loadMineralLorry({[powerSpawn.id]: powerSpawn}, lorryCalls);
     const {creep, calls} = makePowerLorry(powerSpawn, 50);
@@ -236,7 +236,22 @@ function makePowerSpawn(power, freePower) {
     assert.equal(calls.withdraws.length, 1);
     assert.equal(calls.withdraws[0].source, creep.room.terminal);
     assert.equal(calls.withdraws[0].resource, 'power');
-    assert.equal(calls.withdraws[0].amount, 1);
+    assert.equal(calls.withdraws[0].amount, 50);
+    assert.equal(lorryCalls.length, 0);
+}
+
+// Reloads are batched: one tick of processing (1 power free) must not send the
+// loader on a 1-power round trip, and it stays assigned.
+{
+    const powerSpawn = makePowerSpawn(99, 1);
+    const lorryCalls = [];
+    const role = loadMineralLorry({[powerSpawn.id]: powerSpawn}, lorryCalls);
+    const {creep, calls} = makePowerLorry(powerSpawn, 50);
+
+    role.run(creep);
+
+    assert.equal(creep.memory.role, 'mineralLorry');
+    assert.equal(calls.withdraws.filter((w) => w.resource == 'power').length, 0);
     assert.equal(lorryCalls.length, 0);
 }
 
@@ -311,6 +326,8 @@ function loadSpecialStructureMarket(memory) {
     const sandbox = {
         module: {exports: {}},
         exports: {},
+        // Nothing else is committed to the market in these ticks.
+        require: (name) => (name == 'market.exposure' ? {getPending: () => 0, addPending: () => {}} : undefined),
         Game: {time: 12345},
         Memory: memory || {},
         _: {

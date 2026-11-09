@@ -47,6 +47,18 @@ function getRampartRepairTargetHits(creep)
 function findRampartRepairTarget(creep)
 {
     var rampartTargetHits = getRampartRepairTargetHits(creep);
+    // Stay on the chosen rampart for a while; re-picking the global weakest
+    // every tick walks the creep around the whole perimeter.
+    var current = creep.memory.repairTargetId
+        ? Game.getObjectById(creep.memory.repairTargetId) : null;
+    if (current
+        && current.structureType == STRUCTURE_RAMPART
+        && current.pos.roomName == creep.room.name
+        && current.hits < rampartTargetHits
+        && Game.time < (creep.memory.repairTargetUntil || 0))
+    {
+        return current;
+    }
     var ramparts = creep.room.find(FIND_MY_STRUCTURES, {
         filter: (s) => s.structureType == STRUCTURE_RAMPART
             && s.hits < rampartTargetHits
@@ -58,6 +70,11 @@ function findRampartRepairTarget(creep)
         {
             weakest = rampart;
         }
+    }
+    if (weakest)
+    {
+        creep.memory.repairTargetId = weakest.id;
+        creep.memory.repairTargetUntil = Game.time + 50;
     }
     return weakest;
 }

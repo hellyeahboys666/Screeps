@@ -7,6 +7,8 @@
  * near the target, with per-tick reservations so nearby workers spread out.
  */
 
+var energyFallback = require('energy.fallback');
+
 var DEFAULT_WORK_RANGE = 3;
 var MAX_WORK_RANGE = 3;
 var RECALCULATE_EVERY = 25;
@@ -35,6 +37,19 @@ function moveToAssignedWorkPosition(creep, target, range, fallbackToTarget)
     }
 
     range = Math.min(Math.max(range || DEFAULT_WORK_RANGE, 1), MAX_WORK_RANGE);
+    // Already working from the remembered seat: the full scan would re-pick it,
+    // so skip ~300 lookFor calls per working creep per tick.
+    var held = creep.memory.workPosition;
+    if (!fallbackToTarget && held
+        && held.targetId == getTargetId(target)
+        && held.range == range
+        && held.pos == serializePos(creep.pos)
+        && !isReservedByAnother(creep, creep.pos))
+    {
+        held.updated = Game.time;
+        reserveWorkPosition(creep, target, creep.pos);
+        return true;
+    }
     var workPos = chooseWorkPosition(creep, target, range);
     if (!workPos)
     {
@@ -73,7 +88,7 @@ function chooseWorkPosition(creep, target, range)
     {
         var pos = positions[i];
         var score = scoreWorkPosition(creep, target, pos, range, remembered, terrain);
-        if (score < bestScore || (score == bestScore && isBetterTieBreak(pos, best, target.pos)))
+        if (score < bestScore || (score == bestScore && score != Infinity && isBetterTieBreak(pos, best, target.pos)))
         {
             best = pos;
             bestScore = score;
@@ -190,6 +205,14 @@ function isStandableWorkPosition(creep, pos, terrain, tileState)
     tileState = tileState || {};
     tileState.terrain = terrain.get(pos.x, pos.y);
     if (tileState.terrain == TERRAIN_MASK_WALL)
+    {
+        return false;
+    }
+
+    // main.js moves non-haulers off the spawn drop spot every tick, so a work
+    // seat there would be lost every other tick.
+    var dropPos = energyFallback.getSpawnDropPos(Game.rooms[pos.roomName]);
+    if (dropPos && dropPos.x == pos.x && dropPos.y == pos.y && dropPos.roomName == pos.roomName)
     {
         return false;
     }

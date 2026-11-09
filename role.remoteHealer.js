@@ -96,10 +96,16 @@ module.exports = {
         })[0];
         if (creep.room.name != targetRoom)
         {
-            if (flag && !creep.pos.inRangeTo(flag, 1))
+            // Rally once; re-checking the flag after leaving it makes the
+            // healer oscillate between the flag and the exit.
+            if (flag && !creep.memory.rallied)
             {
-                creep.moveTo(flag);
-                return;
+                if (!creep.pos.inRangeTo(flag, 1))
+                {
+                    creep.moveTo(flag);
+                    return;
+                }
+                creep.memory.rallied = true;
             }
             moveToRoom(creep, creep.memory.target);
             return;
@@ -121,6 +127,13 @@ module.exports = {
             if (friendly == undefined && creep.hits < creep.hitsMax)
             {
                 friendly = creep;
+            }
+            if (friendly == undefined
+                && (creep.pos.x == 0 || creep.pos.x == 49 || creep.pos.y == 0 || creep.pos.y == 49))
+            {
+                // Idling on the exit tile would bounce the healer out of the room.
+                creep.moveTo(new RoomPosition(25, 25, targetRoom), {range: 20});
+                return;
             }
             healOrMoveTo(creep, friendly);
         }

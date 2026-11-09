@@ -75,14 +75,19 @@ function getAvoidRooms(creep, targetRoom)
     return [];
 }
 
-function moveToRoom(creep, targetRoom)
+// Route and exit tile change only when the creep changes room, so look them up
+// once per room visit instead of every tick; by path so an exit segment walled
+// off from the creep is never picked.
+function getTravelExit(creep, targetRoom, avoidRooms)
 {
-    if (!isValidRoomName(targetRoom))
+    var travel = creep.memory.travelExit;
+    if (travel && travel.room == creep.room.name && travel.target == targetRoom
+        && travel.time >= Game.time - 1)
     {
-        creep.memory.targetRoomError = 'invalid room ' + targetRoom;
-        return;
+        travel.time = Game.time;
+        return travel;
     }
-    var avoidRooms = getAvoidRooms(creep, targetRoom);
+    travel = {room: creep.room.name, target: targetRoom, time: Game.time};
     var route = Game.map.findRoute(creep.room.name, targetRoom,
     {
         routeCallback: function(roomName)
@@ -94,10 +99,34 @@ function moveToRoom(creep, targetRoom)
             return 1;
         }
     });
-
     if (Array.isArray(route) && route.length > 0)
     {
-        var exitType = route[0].exit;
+        travel.exit = route[0].exit;
+        var exitPos = creep.pos.findClosestByPath(travel.exit)
+            || creep.pos.findClosestByRange(travel.exit);
+        if (exitPos)
+        {
+            travel.x = exitPos.x;
+            travel.y = exitPos.y;
+        }
+    }
+    creep.memory.travelExit = travel;
+    return travel;
+}
+
+function moveToRoom(creep, targetRoom)
+{
+    if (!isValidRoomName(targetRoom))
+    {
+        creep.memory.targetRoomError = 'invalid room ' + targetRoom;
+        return;
+    }
+    var avoidRooms = getAvoidRooms(creep, targetRoom);
+    var travel = getTravelExit(creep, targetRoom, avoidRooms);
+
+    if (travel.exit != undefined)
+    {
+        var exitType = travel.exit;
         var exitDirection = getExitMoveDirection(exitType);
         if (exitDirection && isOnExitEdge(creep, exitType))
         {
@@ -105,7 +134,7 @@ function moveToRoom(creep, targetRoom)
             return;
         }
 
-        var exitPos = creep.pos.findClosestByRange(exitType);
+        var exitPos = travel.x != undefined ? new RoomPosition(travel.x, travel.y, creep.room.name) : undefined;
         if (exitPos)
         {
             if (exitDirection && exitPos.isEqualTo(creep.pos))

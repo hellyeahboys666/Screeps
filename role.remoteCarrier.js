@@ -177,6 +177,7 @@ function clearRemoteBuildMemory(creep)
     delete creep.memory.depotFlag;
     delete creep.memory.avoidRooms;
     delete creep.memory.conditionalAvoidRooms;
+    delete creep.memory._exitCache;
 }
 
 function retireCompletedRemoteCarrier(creep)
@@ -263,23 +264,34 @@ function moveToRoom(creep, roomName)
     var avoidRooms = getAvoidRooms(creep);
     if (avoidRooms.length > 0)
     {
-        var route = Game.map.findRoute(creep.room.name, roomName,
+        // Only the first exit is used, so route once per room instead of per tick.
+        var routeKey = creep.room.name + '>' + roomName + '|' + avoidRooms.join(',');
+        var cachedExit = creep.memory._exitCache;
+        if (cachedExit && cachedExit.key == routeKey)
         {
-            routeCallback: function(nextRoomName)
-            {
-                if (avoidRooms.indexOf(nextRoomName) >= 0)
-                {
-                    return Infinity;
-                }
-                return 1;
-            }
-        });
-        if (!Array.isArray(route) || route.length <= 0)
-        {
-            creep.say('no route');
-            return;
+            exit = cachedExit.exit;
         }
-        exit = route[0].exit;
+        else
+        {
+            var route = Game.map.findRoute(creep.room.name, roomName,
+            {
+                routeCallback: function(nextRoomName)
+                {
+                    if (avoidRooms.indexOf(nextRoomName) >= 0)
+                    {
+                        return Infinity;
+                    }
+                    return 1;
+                }
+            });
+            if (!Array.isArray(route) || route.length <= 0)
+            {
+                creep.say('no route');
+                return;
+            }
+            exit = route[0].exit;
+            creep.memory._exitCache = {key: routeKey, exit: exit};
+        }
     }
     else
     {
@@ -574,7 +586,7 @@ var roleRemoteCarrier = {
             {
                 moveToRoom(creep, creep.memory.home);
             }
-            else
+            else if (!moveOffRoomEdge(creep))
             {
                 creep.say('pause');
             }

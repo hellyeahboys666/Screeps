@@ -268,7 +268,12 @@ var rolemineralLorry = {
                     retireAsLorry(creep);
                     return;
                 }
-                if (desiredAmount <= 0)
+                // processPower() frees 1 power per tick; batch Power Spawn
+                // reloads instead of shuttling 1-2 power every other tick.
+                var minReload = assignedSpecialStructure.structureType == STRUCTURE_POWER_SPAWN
+                    ? Math.min(50, creep.store.getCapacity(mineralType) || 50)
+                    : 1;
+                if (desiredAmount < minReload)
                 {
                     if (tryWithdrawPowerSpawnEnergy(creep, assignedSpecialStructure))
                     {

@@ -337,7 +337,32 @@ function moveToWithMatrix(creep, originalMoveTo, args)
         {
             return false;
         }
-        return getDynamicMatrix(creep.room);
+        // A returned matrix replaces the engine's, which is what blocks live
+        // creeps and own obstacle sites. Re-add those, keeping the soft cost
+        // only on tiles already priced as stationary workers.
+        var matrix = getDynamicMatrix(creep.room).clone();
+        var blockers = creep.room.find(FIND_CREEPS);
+        if (typeof FIND_POWER_CREEPS != 'undefined')
+        {
+            blockers = blockers.concat(creep.room.find(FIND_POWER_CREEPS));
+        }
+        for (let other of blockers)
+        {
+            if (matrix.get(other.pos.x, other.pos.y) < STATIONARY_WORKER_COST)
+            {
+                matrix.set(other.pos.x, other.pos.y, BLOCKED_TILE_COST);
+            }
+        }
+        var sites = creep.room.find(FIND_MY_CONSTRUCTION_SITES);
+        for (let site of sites)
+        {
+            if (typeof OBSTACLE_OBJECT_TYPES != 'undefined'
+                && OBSTACLE_OBJECT_TYPES.indexOf(site.structureType) >= 0)
+            {
+                matrix.set(site.pos.x, site.pos.y, BLOCKED_TILE_COST);
+            }
+        }
+        return matrix;
     };
 
     recordUse(creep);

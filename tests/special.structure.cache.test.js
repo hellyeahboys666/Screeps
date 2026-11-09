@@ -47,6 +47,8 @@ function loadSpecialStructureMarket(game, memory) {
     const sandbox = {
         module: {exports: {}},
         exports: {},
+        // Nothing else is committed to the market in these ticks.
+        require: (name) => (name == 'market.exposure' ? {getPending: () => 0, addPending: () => {}} : undefined),
         Game: game,
         Memory: memory,
         _: {some(collection, predicate) { return collection.some(predicate); }},

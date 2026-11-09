@@ -1,4 +1,5 @@
 var energyReserve = require('energy.reserve');
+var marketExposure = require('market.exposure');
 
 var DEFAULT_BUY_PRICE = 36.5;
 var DEFAULT_MAX_ORDER_AMOUNT = 250000;
@@ -61,7 +62,7 @@ function getOpenBuyExposure()
             exposure += getOrderRemaining(order) * order.price;
         }
     }
-    return exposure;
+    return exposure + marketExposure.getPending();
 }
 
 function getOpenRoomEnergyBuyAmount(roomName)
@@ -235,6 +236,7 @@ function maintain(spawn)
     if (result == OK)
     {
         spawn.memory.energyReserveLastOrderCreateTick = Game.time;
+        marketExposure.addPending(orderAmount * price * 1.05);
     }
     recordStatus(spawn, status);
 }

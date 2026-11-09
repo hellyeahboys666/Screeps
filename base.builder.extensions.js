@@ -22,7 +22,15 @@ function planExtensions(input, seed, requested) {
     var road = existing.concat(seed).filter(o => o.type === 'road').map(o => o.pos);
     var goals = seed.filter(o => o.type === 'container').map(o => o.pos);
     var result = [];
-    function reachable() {
+    // Structures a creep has to stand next to: the planned core, and every
+    // extension placed so far (each needs a free neighbour to be refilled).
+    var workers = seed.filter(o => !passable(o.type) && o.type !== 'extractor').map(o => o.pos);
+    function seated(seen, p) {
+        for (var dy=-1;dy<=1;dy++) for (var dx=-1;dx<=1;dx++)
+            if ((dx || dy) && valid({x:p.x+dx,y:p.y+dy}) && seen[index(p.x+dx,p.y+dy)]) return true;
+        return false;
+    }
+    function reachable(extra) {
         var start = input.anchor.pos, seen = new Uint8Array(2500), queue = [start];
         seen[index(start.x,start.y)] = 1;
         for (var h=0;h<queue.length;h++) {
@@ -35,6 +43,9 @@ function planExtensions(input, seed, requested) {
             }
         }
         for (var goal of goals) if (!seen[index(goal.x,goal.y)]) return false;
+        for (var w of workers) if (!seated(seen, w)) return false;
+        for (var e of result) if (!seated(seen, e.pos)) return false;
+        if (extra && !seated(seen, extra)) return false;
         var work = false;
         for (var p of queue) if (range(p,input.controller.pos)<=3) {work=true;break;}
         return work;
@@ -63,7 +74,7 @@ function planExtensions(input, seed, requested) {
         if (result.length >= target) break;
         var p=candidate.pos,i=index(p.x,p.y);
         blocked.add(i);
-        if (!reachable()) {blocked.delete(i);continue;}
+        if (!reachable(p)) {blocked.delete(i);continue;}
         result.push({type:'extension',purpose:'extension:'+(ownedCount+result.length),pos:p,priority:50});
     }
     return {entries:result,blockers:result.length<target ? ['insufficientAccessibleSpace'] : []};

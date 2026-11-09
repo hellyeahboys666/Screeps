@@ -124,6 +124,13 @@ module.exports = function() {
 		    {
 		        memory.avoidRooms = avoidRooms;
 		    }
+		    // A reservation loses 1 tick per tick and each CLAIM adds 1, so one CLAIM
+		    // only holds it in place. Two build a buffer that outlasts a spawn gap,
+		    // and let the reserve-ticks gate skip spawning while it's high.
+		    if (energy >= 1300)
+		    {
+		        return this.spawnCreep([CLAIM, CLAIM, MOVE, MOVE], numbers, {memory: memory});
+		    }
 		    return this.spawnCreep([CLAIM, MOVE], numbers, {memory: memory});
 		}
 		StructureSpawn.prototype.createControllerAttacker =
@@ -572,8 +579,8 @@ module.exports = function() {
 		    };
 		    return this.spawnCreep(body, numbers, {memory: memory});
 		};
-	StructureSpawn.prototype.createHealer = 
-		function (energy, target, numbers)
+	StructureSpawn.prototype.createHealer =
+		function (energy, target, numbers, avoidRooms)
 		{
 		    var nParts = Math.min(Math.floor(energy/300), 25);
 		    if (nParts < 1)
@@ -598,6 +605,11 @@ module.exports = function() {
 		        wantsCombatBoosts: true,
 		        boostStrict: false
 		    };
+		    // Travel the same way as the attackers it supports.
+		    if (avoidRooms != undefined)
+		    {
+		        memory.avoidRooms = avoidRooms;
+		    }
 		    return this.spawnCreep(body, numbers, {memory: memory});
 		};
 		StructureSpawn.prototype.createSLinker =

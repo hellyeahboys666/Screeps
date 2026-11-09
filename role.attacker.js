@@ -44,7 +44,12 @@ module.exports = {
         var incomingDamage = estimateIncomingDamage(creep);
         var target = chooseAttackTarget(creep.room, creep, targetFlag);
         var movementGoal = getMovementGoal(creep, target, targetFlag, targetRoom);
-        var blocker = movementGoal ? getNextStepBlocker(creep.pos, movementGoal, creep) : undefined;
+        // One path search per tick: moveToward() reuses it. Once in range the
+        // search always returned an empty path, so it is skipped.
+        var pathResult = movementGoal && !isGoalReached(creep, movementGoal)
+            ? findSinglePathResult(creep, creep.pos, movementGoal, 'blocker', false)
+            : undefined;
+        var blocker = pathResult ? getNextStepBlocker(creep.pos, pathResult) : undefined;
         var focusTarget = blocker || target;
 
         attackNearby(creep, focusTarget);
@@ -62,7 +67,7 @@ module.exports = {
 
         if (movementGoal)
         {
-            moveToward(creep, movementGoal, target);
+            moveToward(creep, movementGoal, target, pathResult);
         }
     }
 };
@@ -176,13 +181,19 @@ function isOnExitEdge(creep, exit)
         || (exit == FIND_EXIT_LEFT && creep.pos.x == 0);
 }
 
-function moveToRoom(creep, targetRoom)
+// Route and exit tile change only when the creep changes room, so look them up
+// once per room visit instead of every tick; by path so an exit segment walled
+// off from the creep is never picked.
+function getTravelExit(creep, targetRoom, avoidRooms)
 {
-    if (!isValidRoomName(targetRoom))
+    var travel = creep.memory.travelExit;
+    if (travel && travel.room == creep.room.name && travel.target == targetRoom
+        && travel.time >= Game.time - 1)
     {
-        return;
+        travel.time = Game.time;
+        return travel;
     }
-    var avoidRooms = getAvoidRooms(creep);
+    travel = {room: creep.room.name, target: targetRoom, time: Game.time};
     var route = Game.map.findRoute(creep.room.name, targetRoom,
     {
         routeCallback: function(roomName)
@@ -194,10 +205,33 @@ function moveToRoom(creep, targetRoom)
             return 1;
         }
     });
-
     if (Array.isArray(route) && route.length > 0)
     {
-        var exitType = route[0].exit;
+        travel.exit = route[0].exit;
+        var exitPos = creep.pos.findClosestByPath(travel.exit)
+            || creep.pos.findClosestByRange(travel.exit);
+        if (exitPos)
+        {
+            travel.x = exitPos.x;
+            travel.y = exitPos.y;
+        }
+    }
+    creep.memory.travelExit = travel;
+    return travel;
+}
+
+function moveToRoom(creep, targetRoom)
+{
+    if (!isValidRoomName(targetRoom))
+    {
+        return;
+    }
+    var avoidRooms = getAvoidRooms(creep);
+    var travel = getTravelExit(creep, targetRoom, avoidRooms);
+
+    if (travel.exit != undefined)
+    {
+        var exitType = travel.exit;
         var exitDirection = getExitMoveDirection(exitType);
         if (exitDirection && isOnExitEdge(creep, exitType))
         {
@@ -205,7 +239,7 @@ function moveToRoom(creep, targetRoom)
             return;
         }
 
-        var exit = creep.pos.findClosestByRange(exitType);
+        var exit = travel.x != undefined ? new RoomPosition(travel.x, travel.y, creep.room.name) : undefined;
         if (exit)
         {
             if (exitDirection && exit.isEqualTo(creep.pos))
@@ -297,7 +331,7 @@ function chooseAttackTarget(room, creep, targetFlag)
     var dangerous = room.find(FIND_HOSTILE_CREEPS,
     {
         filter: function(c) {
-            return isHostile(c) && (c.getActiveBodyparts(ATTACK) > 0
+            return isTargetableHostile(c) && (c.getActiveBodyparts(ATTACK) > 0
                 || c.getActiveBodyparts(RANGED_ATTACK) > 0
                 || c.getActiveBodyparts(HEAL) > 0);
         }
@@ -316,7 +350,7 @@ function chooseAttackTarget(room, creep, targetFlag)
         return closestToPos(towers, creep.pos);
     }
 
-    var hostileCreeps = room.find(FIND_HOSTILE_CREEPS, {filter: isHostile});
+    var hostileCreeps = room.find(FIND_HOSTILE_CREEPS, {filter: isTargetableHostile});
     if (hostileCreeps.length > 0)
     {
         return closestToPos(hostileCreeps, creep.pos);
@@ -362,7 +396,8 @@ function chooseAttackTarget(room, creep, targetFlag)
     var hostileStructures = room.find(FIND_HOSTILE_STRUCTURES,
     {
         filter: function(s) {
-            return s.structureType != STRUCTURE_CONTROLLER && isHostileStructure(s);
+            // Keeper lairs and other hitless structures can never be destroyed.
+            return s.structureType != STRUCTURE_CONTROLLER && isHostileStructure(s) && s.hits;
         }
     });
     if (hostileStructures.length > 0)
@@ -528,18 +563,25 @@ function rangedMassScore(creep)
     return score;
 }
 
-function moveToward(creep, goal, target)
+function isGoalReached(creep, goal)
+{
+    return creep.pos.roomName == goal.pos.roomName && creep.pos.getRangeTo(goal.pos) <= goal.range;
+}
+
+function moveToward(creep, goal, target, pathResult)
 {
     if (!goal || !goal.pos)
     {
         return;
     }
-    if (creep.pos.roomName == goal.pos.roomName && creep.pos.getRangeTo(goal.pos) <= goal.range)
+    if (isGoalReached(creep, goal))
     {
         return;
     }
 
-    var pathResult = findSinglePathResult(creep, creep.pos, goal, 'move', true);
+    // run() already searched this path this tick (the incomplete-path streak
+    // has not changed since); record it as the move search.
+    recordSinglePathResult(creep, pathResult, getSoloPathMaxOps(creep), creep.pos, goal, 'move', true);
     var path = pathResult && pathResult.path;
     if (!path || path.length == 0)
     {
@@ -626,9 +668,8 @@ function findSinglePathResult(creep, startPos, goal, context, affectsStreak)
     return result;
 }
 
-function getNextStepBlocker(pos, goal, creep)
+function getNextStepBlocker(pos, result)
 {
-    var result = findSinglePathResult(creep, pos, goal, 'blocker', false);
     if (!result.path || result.path.length == 0)
     {
         return undefined;
@@ -640,18 +681,9 @@ function getNextStepBlocker(pos, goal, creep)
 function singleCostMatrix(roomName, selfName)
 {
     var room = Game.rooms[roomName];
-    var terrain = Game.map.getRoomTerrain(roomName);
+    // Terrain walls need no entry: a 0 cost already means "use terrain", and
+    // PathFinder never enters a terrain wall unless a cost is set (tunnels).
     var costs = new PathFinder.CostMatrix();
-    for (var x = 0; x < 50; x++)
-    {
-        for (var y = 0; y < 50; y++)
-        {
-            if (terrain.get(x, y) == TERRAIN_MASK_WALL)
-            {
-                costs.set(x, y, 255);
-            }
-        }
-    }
 
     if (!room)
     {
@@ -779,7 +811,8 @@ function isBlockingStructure(s)
 
 function isDestructibleObstacle(s)
 {
-    if (!s || !s.structureType || s.structureType == STRUCTURE_CONTROLLER)
+    // No hits: indestructible (keeper lairs, novice/respawn border walls).
+    if (!s || !s.structureType || s.structureType == STRUCTURE_CONTROLLER || !s.hits)
     {
         return false;
     }
@@ -879,6 +912,13 @@ function isHostile(creep)
         return false;
     }
     return !isAllyName(creep.owner.username);
+}
+
+// Source Keepers outclass a solo attacker; they still count as threats for
+// retreat math, but are only chased when named explicitly via targetId.
+function isTargetableHostile(creep)
+{
+    return isHostile(creep) && creep.owner.username != 'Source Keeper';
 }
 
 function isAllyName(username)
