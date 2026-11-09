@@ -320,9 +320,10 @@ function runStage(sim, fixture, baseline, records, label) {
     const additions = sim.additions.slice(additionIndex);
     const addedIds = new Set(sim.completions.filter(c => sim.additions.some(a => a.id === c._id)).map(c => c.builtId));
     const layout = auditLayout(sim, sim.objects, records, label, addedIds);
-    const disconnected = layout.connections.filter(item => !item.connected);
+    // Roads and ramparts are deferred by the default minRcl policy (road 2, rampart 3).
+    const disconnected = sim.cap('road') > 0 ? layout.connections.filter(item => !item.connected) : [];
     records.check(disconnected.length === 0, 'roadsConnectSpawnsSourcesControllerStorage', {label, disconnected});
-    const uncovered = sim.level >= 2 ? layout.coverage.filter(item => !item.covered) : [];
+    const uncovered = sim.cap('rampart') > 0 ? layout.coverage.filter(item => !item.covered) : [];
     records.check(uncovered.length === 0, 'rampartsCoverBuiltVitals', {label, uncovered});
     const orphanNewRoads = layout.disconnectedRoads.filter(item => addedIds.has(item.id));
     records.check(orphanNewRoads.length === 0, 'newRoadsJoinSpawnNetwork', {label, orphanNewRoads});
@@ -383,6 +384,14 @@ function runFixture(fixture, filename, sources, fixtureHash = digest(fs.readFile
         // are immutable: enforce executor targets and separately report gaps
         // above policy (e.g. incompatible E9S18 reaction labs, default cap 3).
         result.initialProposalTargets = finiteTargets(sim, countBy(full), 8, fixture.variant === 'fresh');
+        // The planner deliberately proposes only purposeful links (2 source,
+        // controller, base) and containers (2 source, controller, mineral), not
+        // filler up to the official 6/5; enforce the executor policy for those.
+        if (fixture.variant === 'fresh') {
+            const policy = finiteTargets(sim, countBy(full), 8, false);
+            result.initialProposalTargets = result.initialProposalTargets.map(t =>
+                t.type === 'link' || t.type === 'container' ? policy.find(p => p.type === t.type) : t);
+        }
         result.initialProposalDeficits = finiteDeficits(sim, result.initialProposalTargets);
         records.check(result.initialProposalDeficits.length === 0, 'finiteProposalTargetsFilled',
             {deficits: result.initialProposalDeficits});

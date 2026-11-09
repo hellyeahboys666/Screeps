@@ -97,16 +97,20 @@ function sourceSnapshot() {
 function sourceHashes(sources) {
     return Object.fromEntries(Object.entries(sources).map(([name, text]) => [name + '.js', digest(text)]));
 }
-function effectiveCap(type, level, globalLimits = {}, roomLimits = {}) {
+// Mirrors base.builder.executor.js typeLimit(): default minRcl gate, then caps.
+function effectiveCap(type, level, globalLimits = {}, roomLimits = {}, globalMin = {}, roomMin = {}) {
     const official = CONTROLLER_STRUCTURES[type] && CONTROLLER_STRUCTURES[type][level] || 0;
-    let value = ({factory: 0, lab: 3})[type];
-    let limited = type === 'factory' || type === 'lab';
-    for (const limits of [globalLimits, roomLimits]) {
-        if (limits && typeof limits === 'object' && !Array.isArray(limits) && Object.hasOwn(limits, type)) {
-            value = limits[type]; limited = true;
+    const pick = (fallback, layers) => {
+        let value = fallback;
+        for (const limits of layers) {
+            if (limits && typeof limits === 'object' && !Array.isArray(limits) && Object.hasOwn(limits, type)) value = limits[type];
         }
-    }
-    if (!limited) return official;
+        return value;
+    };
+    const minRcl = pick(({road: 2, rampart: 3})[type] || 0, [globalMin, roomMin]);
+    if (!Number.isInteger(minRcl) || minRcl < 0 || level < minRcl) return 0;
+    const defaults = {factory: 0, lab: 3, link: 4, container: level >= 6 ? 4 : 3};
+    const value = pick(Object.hasOwn(defaults, type) ? defaults[type] : official, [globalLimits, roomLimits]);
     return Number.isInteger(value) && value >= 0 ? Math.min(official, value) : 0;
 }
 function validateFixture(fixture) {
@@ -205,7 +209,8 @@ class Simulation {
     get sites() { return this.objects.filter(o => o.type === 'constructionSite'); }
     get counts() { return countBy(this.built.concat(this.sites)); }
     cap(type, level = this.level) {
-        return effectiveCap(type, level, this.memory.baseBuilder && this.memory.baseBuilder.typeLimits, this.state.typeLimits);
+        return effectiveCap(type, level, this.memory.baseBuilder && this.memory.baseBuilder.typeLimits, this.state.typeLimits,
+            this.memory.baseBuilder && this.memory.baseBuilder.minRcl, this.state.minRcl);
     }
     reload() {
         this.instrumentation.resets++;

@@ -41,23 +41,35 @@ function connectRoads(input, seed) {
     });
     function route(goal) {
         var start = input.anchor.pos;
-        var seen = new Uint8Array(2500), parent = new Int16Array(2500);
-        var queue = [posKey(start)], startI = posKey(start), endI = -1;
-        seen[startI] = 1;
-        // Eight-way flood fill, bounded to the room; exit tiles are not valid detours.
-        for (var head = 0; head < queue.length; head++) {
-            var i = queue[head], x = i % 50, y = Math.floor(i / 50);
-            if (i !== startI && range({x: x, y: y}, goal.pos) <= goal.radius
-                && (!goal.anchor || !containers.has(i) || paved.has(i))) { endI = i; break; }
-            for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
-                if (!dx && !dy) continue;
-                var nx = x + dx, ny = y + dy;
-                if (nx < 1 || nx > 48 || ny < 1 || ny > 48) continue;
-                var n = index(nx, ny);
-                if (seen[n] || (input.terrain[n] === 1 && !paved.has(n)) || blocked.has(n)) continue;
-                seen[n] = 1;
-                parent[n] = i;
-                queue.push(n);
+        var done = new Uint8Array(2500), parent = new Int16Array(2500);
+        var cost = new Uint16Array(2500).fill(65535), buckets = [[posKey(start)]];
+        var startI = posKey(start), endI = -1;
+        cost[startI] = 0;
+        // Eight-way Dijkstra (bucket queue), bounded to the room; exit tiles are not
+        // valid detours. Paved tiles (existing or already planned) cost 1, others 2,
+        // so new connectors reuse the existing road network instead of paralleling it.
+        search: for (var c = 0; c < buckets.length; c++) {
+            var bucket = buckets[c];
+            if (!bucket) continue;
+            for (var b = 0; b < bucket.length; b++) {
+                var i = bucket[b];
+                if (done[i] || cost[i] !== c) continue;
+                done[i] = 1;
+                var x = i % 50, y = Math.floor(i / 50);
+                if (i !== startI && range({x: x, y: y}, goal.pos) <= goal.radius
+                    && (!goal.anchor || !containers.has(i) || paved.has(i))) { endI = i; break search; }
+                for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+                    if (!dx && !dy) continue;
+                    var nx = x + dx, ny = y + dy;
+                    if (nx < 1 || nx > 48 || ny < 1 || ny > 48) continue;
+                    var n = index(nx, ny);
+                    if (done[n] || (input.terrain[n] === 1 && !paved.has(n)) || blocked.has(n)) continue;
+                    var next = c + (paved.has(n) ? 1 : 2);
+                    if (next >= cost[n]) continue;
+                    cost[n] = next;
+                    parent[n] = i;
+                    (buckets[next] || (buckets[next] = [])).push(n);
+                }
             }
         }
         if (endI === -1) return false;

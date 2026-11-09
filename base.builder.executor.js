@@ -11,16 +11,35 @@ function validPos(pos, roomName) {
 function same(a, b) { return a.x === b.x && a.y === b.y; }
 // Total built + owned-site budget. Room keys override global keys, not the
 // whole object. Invalid explicit values fail closed; never remove old assets.
-function typeLimit(room, type) {
-    var official = CONTROLLER_STRUCTURES[type] && CONTROLLER_STRUCTURES[type][room.controller.level];
-    if (!Number.isInteger(official)) return 0;
-    var limit = type === 'factory' ? 0 : type === 'lab' ? 3 : official;
+// Defaults match what the bot actually uses: no factory, 3 labs, 4 links
+// (2 source, controller, base), and no mineral container before the
+// extractor exists at RCL6 (it is the lowest-priority container entry).
+// minRcl keeps early energy for extensions/upgrading instead of road/rampart decay.
+var DEFAULT_MIN_RCL = {road: 2, rampart: 3};
+function defaultLimit(type, level, official) {
+    if (type === 'factory') return 0;
+    if (type === 'lab') return 3;
+    if (type === 'link') return 4;
+    if (type === 'container') return level >= 6 ? 4 : 3;
+    return official;
+}
+function policyValue(room, key, type, fallback) {
+    var value = fallback;
     var config = typeof Memory !== 'undefined' && Memory.baseBuilder;
     var state = room.memory && room.memory.baseBuilder;
-    for (var limits of [config && config.typeLimits, state && state.typeLimits]) {
+    for (var limits of [config && config[key], state && state[key]]) {
         if (limits && typeof limits === 'object' && !Array.isArray(limits)
-            && Object.prototype.hasOwnProperty.call(limits, type)) limit = limits[type];
+            && Object.prototype.hasOwnProperty.call(limits, type)) value = limits[type];
     }
+    return value;
+}
+function typeLimit(room, type) {
+    var level = room.controller.level;
+    var official = CONTROLLER_STRUCTURES[type] && CONTROLLER_STRUCTURES[type][level];
+    if (!Number.isInteger(official)) return 0;
+    var minRcl = policyValue(room, 'minRcl', type, DEFAULT_MIN_RCL[type] || 0);
+    if (!Number.isInteger(minRcl) || minRcl < 0 || level < minRcl) return 0;
+    var limit = policyValue(room, 'typeLimits', type, defaultLimit(type, level, official));
     return Number.isInteger(limit) && limit >= 0 ? Math.min(official, limit) : 0;
 }
 function currentAccess(room, anchor, structures, sites, sources, minerals, terrain) {

@@ -3,15 +3,15 @@ const access = require('base.builder.access');
 // Optional, non-destructive RCL7/8 reservations. Actual per-RCL legality is
 // checked from CONTROLLER_STRUCTURES by the executor on every placement tick.
 const TARGETS = [
-    {type:'container', count:5, priority:25, near:6},
     {type:'spawn', count:3, priority:82, near:8},
     {type:'tower', count:6, priority:78, near:14},
     {type:'factory', count:1, priority:120, near:9},
     {type:'powerSpawn', count:1, priority:130, near:9},
     {type:'observer', count:1, priority:140, near:12},
-    {type:'nuker', count:1, priority:150, near:10},
-    {type:'link', count:6, priority:80, near:10}
+    {type:'nuker', count:1, priority:150, near:10}
 ];
+// No filler containers/links: the bot only uses source, controller, base and
+// mineral containers and source/controller/base links (see infrastructure).
 function valid(p) {return !!p && Number.isInteger(p.x) && Number.isInteger(p.y)
     && p.x>=0 && p.x<50 && p.y>=0 && p.y<50;}
 function idx(p) {return p.y*50+p.x;}
