@@ -1596,7 +1596,7 @@ function healSquad(room, members, packed, incomingDamage)
     }
     if (packed)
     {
-        var healPlan = getPackedHealPlan(members, incomingDamage);
+        var assignments = getFocusHealAssignments(members, incomingDamage);
         for (var i = 0; i < members.length; i++)
         {
             var healer = members[i];
@@ -1604,7 +1604,7 @@ function healSquad(room, members, packed, incomingDamage)
             {
                 continue;
             }
-            var targetName = healPlan.assignments[healer.name];
+            var targetName = assignments[healer.name];
             var target = targetName ? Game.creeps[targetName] : undefined;
             if (!target)
             {
@@ -1658,6 +1658,67 @@ function healSquad(room, members, packed, incomingDamage)
             }
         }
     }
+}
+
+// Predicted incoming damage can only land on one member per source, so spreading
+// pre-heal over every member's prediction leaves the focused one short; heal
+// also refills a body from the back, so its TOUGH stays stripped. Heal real
+// missing hits first, then put every spare healer on the likeliest focus target.
+function chooseFocusHealTarget(members, incomingDamage)
+{
+    var focus = undefined;
+    var focusScore = Infinity;
+    for (var i = 0; i < members.length; i++)
+    {
+        var score = members[i].hits - (incomingDamage[members[i].name] || 0);
+        if (!focus || score < focusScore)
+        {
+            focus = members[i];
+            focusScore = score;
+        }
+    }
+    return focus;
+}
+
+function getFocusHealAssignments(members, incomingDamage)
+{
+    var focus = chooseFocusHealTarget(members, incomingDamage);
+    var need = {};
+    for (var i = 0; i < members.length; i++)
+    {
+        need[members[i].name] = members[i].hitsMax - members[i].hits
+            + (members[i] === focus ? (incomingDamage[members[i].name] || 0) : 0);
+    }
+    var healers = [];
+    for (var j = 0; j < members.length; j++)
+    {
+        var power = combatMath.directHealPower(members[j]);
+        if (power > 0)
+        {
+            healers.push({creep: members[j], power: power});
+        }
+    }
+    healers.sort(function(a, b) { return b.power - a.power; });
+    var assignments = {};
+    for (var h = 0; h < healers.length; h++)
+    {
+        var target = focus;
+        var bestNeed = 0;
+        for (var k = 0; k < members.length; k++)
+        {
+            if (need[members[k].name] > bestNeed)
+            {
+                target = members[k];
+                bestNeed = need[members[k].name];
+            }
+        }
+        if (target)
+        {
+            assignments[healers[h].creep.name] = target.name;
+            need[target.name] -= healers[h].power;
+        }
+    }
+    return assignments;
 }
 
 function squadNeedsHeal(members, incomingDamage)
@@ -1813,7 +1874,67 @@ function getRetreatStatus(members, incomingDamage)
         // totalDamage and per-member uncovered damage would count each source 4x.
         shouldRetreat: getFocusFireWorstProjected(members, incomingDamage || {}, healPlan.totalHeal) < RETREAT_EXPECTED_HITS
             || healPlan.maxDamage > healPlan.totalHeal
+            || isUnhealedVolleyFatal(members, incomingDamage || {}, healPlan.totalHeal)
     };
+}
+
+// healSquad pre-heals one predicted focus target. If the enemy picks another
+// member, that member takes one volley unhealed and its TOUGH stays stripped
+// (heal refills a body from the back), so the follow-up volley hits harder.
+function isUnhealedVolleyFatal(members, incomingDamage, totalHeal)
+{
+    var focus = chooseFocusHealTarget(members, incomingDamage);
+    for (var i = 0; i < members.length; i++)
+    {
+        var member = members[i];
+        var damage = incomingDamage[member.name] || 0;
+        if (member === focus || damage <= 0)
+        {
+            continue;
+        }
+        if (member.hits - damage < RETREAT_EXPECTED_HITS)
+        {
+            return true;
+        }
+        var raw = getRawDamageForHitsLost(member, damage);
+        var followUp = combatMath.damageAfterTough({body: getBodyAtHits(member.body, member.hits - damage)}, raw);
+        if (followUp > totalHeal)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+function getRawDamageForHitsLost(creep, hitsLost)
+{
+    var raw = 0;
+    for (var i = 0; i < creep.body.length && hitsLost > 0; i++)
+    {
+        var part = creep.body[i];
+        if (part.hits <= 0)
+        {
+            continue;
+        }
+        var multiplier = part.type == TOUGH ? combatMath.getBoostMultiplier(part, 'damage') : 1;
+        var taken = Math.min(part.hits, hitsLost);
+        raw += taken / (multiplier > 0 ? multiplier : 1);
+        hitsLost -= taken;
+    }
+    return raw + hitsLost;
+}
+
+function getBodyAtHits(body, hits)
+{
+    var partMax = typeof BODYPART_HITS == 'number' ? BODYPART_HITS : 100;
+    var result = [];
+    for (var i = body.length - 1; i >= 0; i--)
+    {
+        var partHits = Math.max(0, Math.min(partMax, hits));
+        hits -= partHits;
+        result[i] = {type: body[i].type, boost: body[i].boost, hits: partHits};
+    }
+    return result;
 }
 
 function getFocusFireWorstProjected(members, incomingDamage, totalHeal)
@@ -4854,7 +4975,58 @@ function scoreDangerousCreepTarget(target, members, topLeft)
     {
         score -= topLeft.getRangeTo(target) * 25;
     }
+    // Damage and heal land in the same tick: a target that dies through its
+    // friends' heal this tick comes first. A non-healer they fully out-heal is
+    // not worth focusing, which leaves their healers as the next choice.
+    var netDamage = getFocusNetDamage(target, members);
+    if (netDamage != undefined && netDamage >= target.hits)
+    {
+        score += 1000000;
+    }
+    else if (netDamage != undefined && netDamage <= 0 && healPower <= 0)
+    {
+        score -= 100000;
+    }
     return score;
+}
+
+function getFocusNetDamage(target, members)
+{
+    var raw = 0;
+    for (var i = 0; i < members.length; i++)
+    {
+        var range = members[i].pos.getRangeTo(target);
+        if (range <= 3)
+        {
+            raw += combatMath.rangedAttackPower(members[i]);
+        }
+        if (range <= 1)
+        {
+            raw += combatMath.attackPower(members[i]);
+        }
+    }
+    if (raw <= 0 || !target.room || !target.owner)
+    {
+        return undefined;
+    }
+    var enemyHeal = 0;
+    var friends = target.room.find(FIND_HOSTILE_CREEPS,
+    {
+        filter: function(c) { return c.owner && c.owner.username == target.owner.username; }
+    });
+    for (var f = 0; f < friends.length; f++)
+    {
+        var healRange = friends[f].pos.getRangeTo(target);
+        if (healRange <= 1)
+        {
+            enemyHeal += combatMath.directHealPower(friends[f]);
+        }
+        else if (healRange <= 3)
+        {
+            enemyHeal += combatMath.rangedHealPower(friends[f]);
+        }
+    }
+    return combatMath.damageAfterTough(target, raw) - enemyHeal;
 }
 
 function getMinRangeToMembers(target, members)

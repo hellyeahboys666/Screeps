@@ -30,6 +30,10 @@ module.exports = {
     run: function(creep)
     {
         selfHeal(creep);
+        if (creep.memory.style == 'coreBreaker' && finishInvaderCoreJob(creep))
+        {
+            return;
+        }
 
         var targetFlag = getTargetFlag(creep);
         var targetRoom = getTargetRoom(creep, targetFlag);
@@ -262,6 +266,43 @@ function moveToRoom(creep, targetRoom)
     {
         creep.moveTo(center, {reusePath: 20});
     }
+}
+
+// A core breaker exists to kill one Invader core. Afterwards it recycles at home
+// instead of falling through to walls or other structures in the remote.
+function finishInvaderCoreJob(creep)
+{
+    if (!creep.memory.coreDone)
+    {
+        if (creep.room.name != creep.memory.invaderCoreRoom || Game.getObjectById(creep.memory.targetId))
+        {
+            return false;
+        }
+        var cores = creep.room.find(FIND_HOSTILE_STRUCTURES,
+        {
+            filter: function(s) { return s.structureType == STRUCTURE_INVADER_CORE && !(s.level > 0); }
+        });
+        if (cores.length > 0)
+        {
+            creep.memory.targetId = cores[0].id;
+            return false;
+        }
+        creep.memory.coreDone = true;
+        delete creep.memory.invaderCoreRoom;
+    }
+
+    var homeRoom = creep.memory.home;
+    if (isValidRoomName(homeRoom) && creep.room.name != homeRoom)
+    {
+        moveToRoom(creep, homeRoom);
+        return true;
+    }
+    var spawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS);
+    if (spawn && spawn.recycleCreep(creep) == ERR_NOT_IN_RANGE)
+    {
+        creep.moveTo(spawn, {reusePath: 10});
+    }
+    return true;
 }
 
 function selfHeal(creep)

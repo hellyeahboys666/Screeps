@@ -250,6 +250,36 @@ module.exports = function() {
 		    }
 		    return this.spawnCreep(body, numbers, {memory: memory});
 		}
+		// Plain ATTACK + MOVE pairs for a level-0 Invader core: it never shoots back,
+		// so no TOUGH or HEAL. Aim to finish in ~300 ticks (every tick alive keeps
+		// its reservation growing), but accept anything that finishes in ~1000.
+		StructureSpawn.prototype.createCoreBreaker =
+		function (energy, targetRoom, targetId, coreHits, numbers)
+		{
+		    var attackPower = typeof ATTACK_POWER == 'number' ? ATTACK_POWER : 30;
+		    var hits = coreHits > 0 ? coreHits : 100000;
+		    var wantedPairs = Math.min(25, Math.ceil(hits / (attackPower * 300)));
+		    var minPairs = Math.min(25, Math.ceil(hits / (attackPower * 1000)));
+		    var capacityPairs = Math.floor(this.room.energyCapacityAvailable / 130);
+		    var pairs = Math.min(wantedPairs, capacityPairs);
+		    if (pairs < minPairs || energy < pairs * 130)
+		    {
+		        return ERR_NOT_ENOUGH_ENERGY;
+		    }
+		    var body = [];
+		    for (let i = 0; i < pairs; i++)
+		    {
+		        body.push(MOVE);
+		    }
+		    for (let i = 0; i < pairs; i++)
+		    {
+		        body.push(ATTACK);
+		    }
+		    var memory = {role: 'attacker', target: targetRoom, targetRoom: targetRoom, targetId: targetId,
+		        invaderCoreRoom: targetRoom, home: this.room.name, style: 'coreBreaker',
+		        boosted: false, wantsBoost: false, retreatOnDamage: false};
+		    return this.spawnCreep(body, numbers, {memory: memory});
+		}
 		StructureSpawn.prototype.createQuadMember =
 		function (energy, squad, slot, targetRoom, targetFlag, retreatRoom, numbers, options)
 		{

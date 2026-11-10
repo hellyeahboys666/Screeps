@@ -9,8 +9,12 @@ var FAST_REMOTE_HARVESTER_TARGET_MOVE_PARTS = 3;
 var FAST_REMOTE_HARVESTER_MIN_MOVE_PARTS = 2;
 var DEFAULT_REMOTE_OWNER_MEMORY_KEY = 'defaultRemoteOwner';
 var REMOTE_BLOCKED_MEMORY_TICKS = 1500;
+var INVADER_USERNAME = 'Invader';
+var INVADER_CORE_MEMORY_TICKS = 5000;
 var remoteCreepIndexTick;
 var remoteCreepIndex;
+var invaderCoreClaimTick;
+var invaderCoreClaims;
 
 function getRemoteReservationOverride(spawn, roomName)
 {
@@ -109,7 +113,7 @@ function getRemoteCreepIndex()
         return remoteCreepIndex;
     }
 
-    var index = {byHome: {}, defaultRemoteHomeRooms: []};
+    var index = {byHome: {}, defaultRemoteHomeRooms: [], invaderCoreBreakersByRoom: {}};
     for (let creepName in Game.creeps)
     {
         let creep = Game.creeps[creepName];
@@ -121,6 +125,12 @@ function getRemoteCreepIndex()
         if (isDefaultRemoteCreep(creep) && memory.home)
         {
             addUniqueName(index.defaultRemoteHomeRooms, memory.home);
+        }
+        if (memory.role == 'attacker' && memory.invaderCoreRoom)
+        {
+            index.invaderCoreBreakersByRoom[memory.invaderCoreRoom]
+                = (index.invaderCoreBreakersByRoom[memory.invaderCoreRoom] || 0) + 1;
+            continue;
         }
         if (!memory.home
             || (memory.role != 'longDistanceHarvester'
@@ -190,6 +200,13 @@ function isRemoteBlockedByOther(spawn, roomName)
         spawn.memory.remoteBlockedSeen = {};
     }
     var seen = spawn.memory.remoteBlockedSeen;
+    var core = spawn.memory.remoteInvaderCores ? spawn.memory.remoteInvaderCores[roomName] : undefined;
+    if (core && core.level > 0)
+    {
+        // Level 1+ strongholds have towers and ramparts: stay away, do not fight.
+        seen[roomName] = Game.time;
+        return true;
+    }
     if (status.visible)
     {
         if (!status.canReserve && status.reason != 'ownedByUs')
@@ -202,6 +219,95 @@ function isRemoteBlockedByOther(spawn, roomName)
     }
     return seen[roomName] != undefined
         && Game.time - seen[roomName] < REMOTE_BLOCKED_MEMORY_TICKS;
+}
+
+// A level-0 Invader core has 100k hits and no towers, ramparts or defenders; it
+// only reserves our remote's controller (or attacks our reservation), which
+// blocks harvesting. Only look for one once the reservation shows 'Invader' or
+// a core was already recorded, so normal planning stays a reservation check.
+function updateInvaderCoreSighting(spawn, roomName)
+{
+    var records = spawn.memory.remoteInvaderCores;
+    var record = records ? records[roomName] : undefined;
+    var room = Game.rooms[roomName];
+    if (!room)
+    {
+        if (record && Game.time - record.seen > INVADER_CORE_MEMORY_TICKS)
+        {
+            delete records[roomName];
+            return undefined;
+        }
+        return record;
+    }
+    var reservation = room.controller ? room.controller.reservation : undefined;
+    if (!record && !(reservation && reservation.username == INVADER_USERNAME))
+    {
+        return undefined;
+    }
+    var cores = room.find(FIND_HOSTILE_STRUCTURES,
+    {
+        filter: function(s) { return s.structureType == STRUCTURE_INVADER_CORE; }
+    });
+    if (cores.length == 0)
+    {
+        if (records)
+        {
+            delete records[roomName];
+        }
+        return undefined;
+    }
+    if (!records)
+    {
+        records = spawn.memory.remoteInvaderCores = {};
+    }
+    record = {id: cores[0].id, level: cores[0].level || 0, hits: cores[0].hits, seen: Game.time};
+    records[roomName] = record;
+    return record;
+}
+
+function isInvaderCoreResponseEnabled(spawn)
+{
+    return Memory.autoInvaderCoreResponse !== false
+        && spawn.memory.autoInvaderCoreResponse !== false;
+}
+
+// Two spawns can plan in the same tick before either new creep is in Game.creeps.
+function claimInvaderCoreRoom(roomName)
+{
+    if (invaderCoreClaimTick != Game.time)
+    {
+        invaderCoreClaimTick = Game.time;
+        invaderCoreClaims = {};
+    }
+    if (invaderCoreClaims[roomName])
+    {
+        return false;
+    }
+    invaderCoreClaims[roomName] = true;
+    return true;
+}
+
+function getInvaderCoreRequest(spawn, roomNames)
+{
+    for (let roomName of roomNames)
+    {
+        var record = updateInvaderCoreSighting(spawn, roomName);
+        if (!record || record.level > 0)
+        {
+            continue;
+        }
+        if (!isInvaderCoreResponseEnabled(spawn) || spawn.spawning)
+        {
+            return undefined;
+        }
+        if (getRemoteCreepIndex().invaderCoreBreakersByRoom[roomName] > 0
+            || !claimInvaderCoreRoom(roomName))
+        {
+            continue;
+        }
+        return {roomName: roomName, targetId: record.id, hits: record.hits};
+    }
+    return undefined;
 }
 
 function shouldSpawnRemoteReserver(spawn, roomName, reserveStatus)
@@ -777,11 +883,18 @@ function getSpawnPlan(spawn)
     var manualReservePlan = getManualReservePlan(spawn, manualReserveRooms);
     updateReserveMemory(spawn, manualReserveRooms, manualReservePlan, defaultRemote);
 
+    var coreWatchRooms = manualReserveRooms.slice();
+    if (defaultRemote.isOwner)
+    {
+        addUniqueName(coreWatchRooms, defaultRemote.roomName);
+    }
+
     return {
         defaultRemote: defaultRemote,
         manualReserveRooms: manualReserveRooms,
         manualReservePlan: manualReservePlan,
-        manualReserveRequest: manualReservePlan.request
+        manualReserveRequest: manualReservePlan.request,
+        invaderCoreRequest: getInvaderCoreRequest(spawn, coreWatchRooms)
     };
 }
 
@@ -793,5 +906,6 @@ module.exports = {
     getRemoteHarvesterWorkParts: getRemoteHarvesterWorkParts,
     shouldRetireObsoleteDefaultRemoteHarvester: shouldRetireObsoleteDefaultRemoteHarvester,
     updateDefaultRemoteLorryAutoTarget: updateDefaultRemoteLorryAutoTarget,
+    getInvaderCoreRequest: getInvaderCoreRequest,
     getSpawnPlan: getSpawnPlan
 };

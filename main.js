@@ -1738,6 +1738,8 @@ function getTowerEffectAt(tower, target, basePower)
     var falloff = typeof TOWER_FALLOFF == 'number' ? TOWER_FALLOFF : 0.75;
     var optimal = typeof TOWER_OPTIMAL_RANGE == 'number' ? TOWER_OPTIMAL_RANGE : 5;
     var falloffRange = typeof TOWER_FALLOFF_RANGE == 'number' ? TOWER_FALLOFF_RANGE : 20;
+    // Operate Tower / Disrupt Tower on our own towers.
+    basePower *= combatMath.towerEffectMultiplier(tower);
     if (range <= optimal)
     {
         return basePower;
@@ -2078,6 +2080,32 @@ function chooseIndividualTowerTarget(tower, hostiles)
     return tower.pos.findClosestByRange(dangerousHostiles.length > 0 ? dangerousHostiles : hostiles);
 }
 
+// Anti-drain: when enemy healing covers even all towers' combined fire on every
+// hostile, and none is within 3 of our creeps or structures, shooting only burns
+// tower energy. Holding fire lets them come closer, where towers hit harder.
+function shouldHoldTowerFire(room, hostiles, activeTowers, creepsInRoom)
+{
+    if (!hostiles || hostiles.length == 0)
+    {
+        return false;
+    }
+    var protectedObjects = (creepsInRoom || []).concat(room.find(FIND_MY_STRUCTURES));
+    for (var i = 0; i < hostiles.length; i++)
+    {
+        var hostile = hostiles[i];
+        if (estimateHostileTowerDamage(hostile, activeTowers) > estimateHostileHealing(hostile, hostiles))
+        {
+            return false;
+        }
+        var closest = getClosestRangeToAny(hostile.pos, protectedObjects);
+        if (closest != undefined && closest <= 3)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 function isTowerDefenseCreep(creep)
 {
     var role = creep && creep.memory ? creep.memory.role : undefined;
@@ -2364,7 +2392,17 @@ function runTowerDefense(room, towers, hostiles, decayingRamparts, creepsInRoom,
 
     var roomCreeps = creepsInRoom || room.find(FIND_MY_CREEPS);
     var attackInfo = chooseTowerFocusTarget(room, hostiles, activeTowers, roomCreeps);
+    if (attackInfo && shouldHoldTowerFire(room, hostiles, activeTowers, roomCreeps))
+    {
+        attackInfo = undefined;
+        summary.holdFire = true;
+    }
     var useFocusFire = shouldUseFocusedTowerFire(attackInfo, hostiles, activeTowers);
+    // Raw damage already sent at the focus target this tick, so towers past the
+    // kill point switch to another hostile instead of overkilling.
+    var focusRawDamage = 0;
+    var otherHostiles = attackInfo && attackInfo.hostile
+        ? hostiles.filter((h) => h.id != attackInfo.hostile.id) : [];
     var healInfo = chooseTowerHealTarget(roomCreeps, hostiles);
     var healBeforeAttack = shouldHealBeforeTowerAttack(healInfo, attackInfo, hostiles);
     var repairTarget = decayingRamparts && decayingRamparts.length > 0 ? decayingRamparts[0] : undefined;
@@ -2400,9 +2438,19 @@ function runTowerDefense(room, towers, hostiles, decayingRamparts, creepsInRoom,
         if (attackInfo && attackInfo.hostile)
         {
             attackTarget = useFocusFire ? attackInfo.hostile : chooseIndividualTowerTarget(tower, hostiles);
+            if (useFocusFire && focusRawDamage > 0
+                && combatMath.damageAfterTough(attackInfo.hostile, focusRawDamage)
+                    >= attackInfo.hostile.hits + (attackInfo.estimatedHeal || 0))
+            {
+                attackTarget = chooseIndividualTowerTarget(tower, otherHostiles);
+            }
         }
         if (attackTarget)
         {
+            if (attackInfo && attackTarget === attackInfo.hostile)
+            {
+                focusRawDamage += getTowerAttackPowerAt(tower, attackTarget);
+            }
             tower.attack(attackTarget);
             summary.action = 'attack';
             summary.focusFire = useFocusFire;
@@ -5133,6 +5181,7 @@ module.exports.loop = function () {
         var remoteE9S17Reserved = defaultRemote.reserved;
         var remoteE9S17WorkParts = defaultRemote.harvesterWorkParts;
         var manualReserveRequest = remoteSpawnPlan.manualReserveRequest;
+        var invaderCoreRequest = remoteSpawnPlan.invaderCoreRequest;
         var bootstrapHarvesterTarget = Math.max(spawn.memory.minHarvesters || 0, sources.length || 1);
         var useHarvesterBootstrap = !containerSetupReady || !canSpawnMiner;
         var whiteFlagPlan = getCachedWhiteFlagPlan(spawn.room, sources, roomPlan.sourceLinkSourceIds);
@@ -5552,6 +5601,16 @@ module.exports.loop = function () {
                     spawn.createRemoteLorry(energy, spawn.room.name, defaultRemote.roomName, defaultRemote.sourceId, makeCreepName(spawn, 'remoteLorry')),
                     'remoteLorry',
                     {remoteRoom: defaultRemote.roomName, sourceId: defaultRemote.sourceId});
+            }
+            else if (invaderCoreRequest)
+            {
+                name = recordSpawnAttempt(spawn,
+                    spawn.createCoreBreaker(energy,
+                        invaderCoreRequest.roomName,
+                        invaderCoreRequest.targetId,
+                        invaderCoreRequest.hits,
+                        makeCreepName(spawn, 'coreBreaker')),
+                    'attacker');
             }
             else if (manualReserveRequest
                 && (manualReserveRequest.roomName != defaultRemote.roomName || defaultRemote.isOwner)

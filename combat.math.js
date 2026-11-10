@@ -127,7 +127,43 @@ function damageAfterTough(creep, rawDamage)
     return Math.ceil(hitsLost);
 }
 
+// Power creep effects on a tower scale all its actions: Operate Tower adds and
+// Disrupt Tower removes 10-50% by power level.
+function towerEffectMultiplier(tower)
+{
+    var multiplier = 1;
+    if (!tower || !tower.effects || typeof POWER_INFO == 'undefined')
+    {
+        return multiplier;
+    }
+    for (var i = 0; i < tower.effects.length; i++)
+    {
+        var effect = tower.effects[i];
+        var id = effect.effect != undefined ? effect.effect : effect.power;
+        var info = POWER_INFO[id];
+        var amount = info && info.effect ? info.effect[effect.level - 1] : undefined;
+        if (typeof amount != 'number')
+        {
+            continue;
+        }
+        if (typeof PWR_OPERATE_TOWER != 'undefined' && id == PWR_OPERATE_TOWER)
+        {
+            multiplier *= 1 + amount;
+        }
+        else if (typeof PWR_DISRUPT_TOWER != 'undefined' && id == PWR_DISRUPT_TOWER)
+        {
+            multiplier *= 1 - amount;
+        }
+    }
+    return multiplier;
+}
+
 function towerDamageAt(tower, pos)
+{
+    return towerBaseDamageAt(tower, pos) * towerEffectMultiplier(tower);
+}
+
+function towerBaseDamageAt(tower, pos)
 {
     var range = tower.pos.getRangeTo(pos);
     var attackPowerBase = typeof TOWER_POWER_ATTACK == 'number' ? TOWER_POWER_ATTACK : 600;
@@ -243,6 +279,7 @@ module.exports = {
     rangedMassAttackPower: rangedMassAttackPower,
     damageAfterTough: damageAfterTough,
     towerDamageAt: towerDamageAt,
+    towerEffectMultiplier: towerEffectMultiplier,
     estimateHostileCreepRawDamage: estimateHostileCreepRawDamage,
     estimateIncomingRawDamage: estimateIncomingRawDamage,
     estimateIncomingDamageBreakdown: estimateIncomingDamageBreakdown,

@@ -328,11 +328,20 @@ var roleDefender = {
             var rangeToHostile = creep.pos.getRangeTo(hostile);
             if (rangeToHostile <= 3)
             {
-                var adjacentHostiles = creep.pos.findInRange(FIND_HOSTILE_CREEPS, 1,
+                // Splash only when it out-damages one focused shot (after TOUGH):
+                // a lone adjacent creep used to pull fire off the focus target.
+                var nearbyHostiles = creep.pos.findInRange(FIND_HOSTILE_CREEPS, 3,
                 {
                     filter: isHostile
                 });
-                if (adjacentHostiles.length > 0)
+                var massDamage = 0;
+                for (var h=0; h<nearbyHostiles.length; h++)
+                {
+                    massDamage += combatMath.damageAfterTough(nearbyHostiles[h],
+                        combatMath.rangedMassAttackPower(creep, creep.pos.getRangeTo(nearbyHostiles[h])));
+                }
+                var focusDamage = combatMath.damageAfterTough(hostile, combatMath.rangedAttackPower(creep));
+                if (massDamage > focusDamage)
                 {
                     creep.rangedMassAttack();
                 }
