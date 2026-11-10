@@ -23,10 +23,10 @@ function overlapping(entries, input) {
 }
 function compose(input, deps, options) {
     options = options || {};
-    var core = deps.core.plan(input);
+    var core = deps.core.plan(input, options.limits);
     if (!core.valid) return {valid: false, reason: 'invalidCore', entries: [], blockers: core.blockers, warnings: []};
     var warnings = [], critical = [];
-    var advanced = deps.infrastructure.plan(input, core);
+    var advanced = deps.infrastructure.plan(input, core, options.limits);
     var infraEntries = advanced.entries || [];
     warnings.push.apply(warnings, advanced.blockers || []);
     var roads = deps.paths.connectRoads(input, core.entries.concat(infraEntries));
@@ -47,7 +47,7 @@ function compose(input, deps, options) {
         roads = deps.paths.connectRoads(input, core.entries);
         base = core.entries.concat(roads.entries);
     }
-    var expansion = deps.expansion.planExpansion(input, base);
+    var expansion = deps.expansion.planExpansion(input, base, options.limits);
     var extraEntries = expansion.entries || [];
     warnings.push.apply(warnings, expansion.blockers || []);
     // Reserve connectors to future storage/spawns before extensions can occupy
@@ -55,7 +55,9 @@ function compose(input, deps, options) {
     var extraRoads = deps.paths.connectRoads(input, base.concat(extraEntries));
     if (extraRoads.blockers.length) warnings.push.apply(warnings, extraRoads.blockers);
     base = base.concat(extraRoads.entries);
-    var extensions = deps.extensions.planExtensions(input, base.concat(extraEntries), options.extensionLimit);
+    var extensions = deps.extensions.planExtensions(input, base.concat(extraEntries),
+        options.limits && Number.isInteger(options.limits.extension)
+            ? Math.min(options.extensionLimit || 60, options.limits.extension) : options.extensionLimit);
     warnings.push.apply(warnings, extensions.blockers || []);
     var staged = base.concat(extraEntries, extensions.entries);
     var blocked = validateAccess(input, staged);

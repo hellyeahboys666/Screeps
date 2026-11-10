@@ -17,7 +17,7 @@ function valid(p) {return !!p && Number.isInteger(p.x) && Number.isInteger(p.y)
 function idx(p) {return p.y*50+p.x;}
 function range(a,b) {return Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));}
 
-function planExpansion(input,seed) {
+function planExpansion(input,seed,limits) {
     const invalid={entries:[],blockers:['invalidExpansionInput']};
     if(!input||input.eligible!==true||!input.anchor||!valid(input.anchor.pos)
         ||!input.controller||!valid(input.controller.pos)
@@ -32,25 +32,37 @@ function planExpansion(input,seed) {
     const entries=[],blockers=[];
     const storage=all.find(o=>o.type==='storage');
     if(guard.check(seed))return {entries:[],blockers:['initialAccessBlocked']};
+    // Tiles never used for these structures, computed once: walls, source and
+    // mineral seats, and the controller's upgrade area.
+    const excluded=new Uint8Array(2500);
+    for(let i=0;i<2500;i++)if(input.terrain[i])excluded[i]=1;
+    const mark=(c,r)=>{for(let y=Math.max(0,c.y-r);y<=Math.min(49,c.y+r);y++)
+        for(let x=Math.max(0,c.x-r);x<=Math.min(49,c.x+r);x++)excluded[y*50+x]=1;};
+    for(const s of input.sources)mark(s.pos,2);
+    for(const m of input.minerals)mark(m.pos,1);
+    mark(input.controller.pos,3);
     for(const spec of TARGETS) {
         const existing=all.concat(entries).filter(o=>o.type===spec.type
             && (o.my!==false || spec.type==='container')).length;
-        for(let ordinal=existing+1;ordinal<=spec.count;ordinal++) {
+        const count=limits&&Number.isInteger(limits[spec.type])?Math.min(spec.count,limits[spec.type]):spec.count;
+        for(let ordinal=existing+1;ordinal<=count;ordinal++) {
             const positions=[];
             const prior=all.concat(entries).filter(o=>o.type===spec.type).map(o=>o.pos);
+            // Walking steps from the storage: haulers refill all of these from
+            // there, and straight-line range ignores walls between pockets.
+            const walk=storage?access.walkDistance(input,access.obstacles(input,seed.concat(entries)),storage.pos):null;
             for(let y=2;y<=47;y++)for(let x=2;x<=47;x++) {
                 const p={x,y}, key=idx(p), d=range(p,input.anchor.pos);
-                if(input.terrain[key]||occupied.has(key)||d>spec.near
-                    ||input.sources.some(s=>range(p,s.pos)<=2)
-                    ||input.minerals.some(m=>range(p,m.pos)<=1)
-                    ||range(p,input.controller.pos)<=3)continue;
-                const fromStorage=storage?range(p,storage.pos):d;
+                if(excluded[key]||d>spec.near||occupied.has(key))continue;
+                const fromStorage=walk?walk[key]:d;
+                if(walk && fromStorage>20)continue;
                 if((spec.type==='factory'||spec.type==='powerSpawn') && fromStorage>8)continue;
                 if(spec.type==='spawn' && (d<3||fromStorage>10))continue;
                 const separation=prior.length?Math.min(...prior.map(q=>range(p,q))):6;
                 if(spec.type==='tower' && separation<3)continue;
-                let score=d*3+fromStorage*2;
-                if(spec.type==='tower')score-=Math.min(separation,9)*5;
+                let score=d*2+fromStorage*3;
+                // Mild spread only: central towers cover every exit and refill fast.
+                if(spec.type==='tower')score-=Math.min(separation,5)*3;
                 else if(spec.type==='spawn')score-=Math.min(separation,7)*3;
                 else if(spec.type==='factory'||spec.type==='powerSpawn')score+=fromStorage*8;
                 positions.push({p,score});

@@ -10,8 +10,8 @@ function obstacles(input, entries) {
     return access.obstacles(input, entries);
 }
 
-function flood(input, blocked) {
-    return access.flood(input, blocked);
+function flood(input, blocked, entries) {
+    return access.flood(input, blocked, access.hubOf(input, entries));
 }
 
 function clearance(input, blocked) {
@@ -34,7 +34,7 @@ function clearance(input, blocked) {
     return distance;
 }
 
-function plan(input) {
+function plan(input, limits) {
     var bad = {valid: false, reason: 'invalidSnapshot', entries: [], blockers: ['invalidSnapshot']};
     if (!input || !input.eligible || !valid(input.anchor && input.anchor.pos)
         || !valid(input.controller && input.controller.pos)
@@ -55,7 +55,7 @@ function plan(input) {
     }
     var guard = access.create(input);
     var blocks = obstacles(input, entries);
-    var reachable = flood(input, blocks);
+    var reachable = flood(input, blocks, entries);
     var clear = clearance(input, blocks);
     function nearSource(pos) { return input.sources.some(function(s) { return range(pos, s.pos) <= 1; }); }
     function add(type, purpose, pos, priority) {
@@ -106,16 +106,23 @@ function plan(input) {
     }
     // A current tower (or manually queued tower) takes precedence over any new plan.
     var hasTower = input.structures.concat(input.sites).some(function(o) { return o.type === 'tower'; });
-    if (!hasTower) {
+    if (!hasTower && !(limits && limits.tower === 0)) {
+        // Rank by walking steps from the storage (planned or built) when there is
+        // one: the first tower must sit inside the base, not across a wall.
+        var bank = access.hubOf(input, entries);
+        var walk = bank ? access.walkDistance(input, obstacles(input, entries), bank) : null;
         var tower = candidates(function(p) {
-            return range(p, input.anchor.pos) <= 7 && !nearSource(p);
-        }, function(p, i) { return range(p, input.anchor.pos) * 10 - Math.min(clear[i], 5) * 2; })
+            return range(p, input.anchor.pos) <= 7 && !nearSource(p) && (!walk || walk[key(p)] <= 10);
+        }, function(p, i) {
+            return (walk ? walk[i] * 6 + range(p, input.anchor.pos) * 4 : range(p, input.anchor.pos) * 10)
+                - Math.min(clear[i], 5) * 2;
+        })
             .find(function(c) { return !guard.check(entries.concat({type: 'tower', pos: c.pos})); });
         if (tower) add('tower', 'coreTower', tower.pos, 30);
         else blockers.push('noCoreTowerSite');
     }
     // Verify planned obstacle structures haven't sealed any mining/controller access.
-    var after = flood(input, obstacles(input, entries));
+    var after = flood(input, obstacles(input, entries), entries);
     for (var source of sources) {
         var seats = entries.filter(function(e) { return e.purpose === 'source:' + source.id; });
         if (seats.length && !after[key(seats[0].pos)]) blockers.push('blockedSourceSeat:' + source.id);

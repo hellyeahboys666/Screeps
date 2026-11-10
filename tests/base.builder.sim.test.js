@@ -389,8 +389,8 @@ function runFixture(fixture, filename, sources, fixtureHash = digest(fs.readFile
         // filler up to the official 6/5; enforce the executor policy for those.
         if (fixture.variant === 'fresh') {
             const policy = finiteTargets(sim, countBy(full), 8, false);
-            result.initialProposalTargets = result.initialProposalTargets.map(t =>
-                t.type === 'link' || t.type === 'container' ? policy.find(p => p.type === t.type) : t);
+            // The planner reserves only what the default typeLimits policy builds.
+            result.initialProposalTargets = policy;
         }
         result.initialProposalDeficits = finiteDeficits(sim, result.initialProposalTargets);
         records.check(result.initialProposalDeficits.length === 0, 'finiteProposalTargetsFilled',
@@ -407,9 +407,15 @@ function runFixture(fixture, filename, sources, fixtureHash = digest(fs.readFile
         {name: 'explicit-full-official-caps', globalLimits: {factory: 1, lab: 10}, roomLimits: {tower: 1}}]) {
             const other = new Simulation(fixture, {sources, ...config});
             const response = other.run();
-            const equal = JSON.stringify(other.state.plan) === JSON.stringify(firstPlan);
+            // The planner now reserves space per policy: planned counts may differ,
+            // but never exceed the policy's final (RCL8) allowance.
+            const planned = countBy(other.state.plan && other.state.plan.entries || []);
+            const within = other.state.plan && Object.keys(planned).every(type => SPATIAL_MAXIMA.has(type)
+                || ['container', 'link', 'extractor', 'storage', 'terminal'].includes(type)
+                || planned[type] <= Math.max(0, other.cap(type, 8) - (baseline[type] || 0)));
+            const equal = !!within;
             records.check(equal && response[0] && response[0].status === 'observing',
-                'realPlannerIsExecutorPolicyAgnostic', {config: config.name, response,
+                'realPlannerReservesOnlyPolicyCounts', {config: config.name, response,
                     comparisonCounts: countBy(other.state.plan && other.state.plan.entries || []),
                     error: other.state.runtimeError});
             records.check(other.attempts.length === 0 && Object.keys(other.flags).length === 0,
@@ -520,7 +526,7 @@ function policyTests(fixture, sources) {
         const records = counter(), phases = [];
         const sim = new Simulation(fixture, {sources, mode: 'place'});
         sim.level = scenario.rcl || 8;
-        Object.assign(sim.state, {plan: clone(plan), planVersion: 2, generatedTick: sim.tick - 1});
+        Object.assign(sim.state, {plan: clone(plan), planVersion: 3, generatedTick: sim.tick - 1});
         const labEntries = plan.entries.filter(e => e.type === 'lab');
         let seeded = 0;
         for (let n = 0; n < (scenario.seedBuiltLabs || 0); n++) {

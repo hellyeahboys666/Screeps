@@ -5,7 +5,7 @@ function valid(p) { return p && Number.isInteger(p.x) && Number.isInteger(p.y) &
 function idx(p) { return p.y * 50 + p.x; }
 function range(a, b) { return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)); }
 function interior(p) { return p.x >= 2 && p.x <= 47 && p.y >= 2 && p.y <= 47; }
-function plan(input, seed = {entries: []}) {
+function plan(input, seed = {entries: []}, limits) {
     const invalid = {valid: false, entries: [], blockers: ['invalidSnapshot']};
     if (!input || !input.eligible || !input.anchor || !valid(input.anchor.pos)
         || !input.controller || !valid(input.controller.pos)
@@ -20,7 +20,8 @@ function plan(input, seed = {entries: []}) {
         input.minerals, [input.controller], seed.entries);
     const taken = new Set(fixed.map(o => idx(o.pos)));
     const blocking = access.obstacles(input, seed.entries);
-    const flood = blocked => access.flood(input, blocked);
+    const hub = access.hubOf(input, seed.entries);
+    const flood = blocked => access.flood(input, blocked, hub);
     const roomFor = (type, cap) => existing.concat(seed.entries, entries).filter(o => o.type === type).length < cap;
     const reachable = flood(blocking);
     const available = p => interior(p) && !input.terrain[idx(p)] && !taken.has(idx(p)) && reachable[idx(p)];
@@ -146,7 +147,11 @@ function plan(input, seed = {entries: []}) {
         }
     }
     const labs = existing.concat(seed.entries).filter(o => o.type === 'lab');
+    // Reserve only the labs the policy will build (2 inputs + outputs).
+    const labLimit = limits && Number.isInteger(limits.lab) ? Math.min(10, limits.lab) : 10;
+    const outputsWanted = labLimit - 2;
     if (labs.length > 10 || labs.some(o => o.my === false)) blockers.push('incompatibleExistingLabs');
+    else if (labLimit < 3 || labs.length >= labLimit) { /* nothing more to reserve */ }
     else {
         const locked = labs.map(o => o.pos).sort((a, b) => a.y - b.y || a.x - b.x);
         const free = [];
@@ -170,7 +175,7 @@ function plan(input, seed = {entries: []}) {
                 const j = byPosition.get(idx(b));
                 if (j === undefined || j <= i) continue;
                 const existingOutputs = locked.filter(p => idx(p) !== idx(a) && idx(p) !== idx(b));
-                if (existingOutputs.length > 8 || existingOutputs.some(p => range(p, a) > 2 || range(p, b) > 2)) continue;
+                if (existingOutputs.length > outputsWanted || existingOutputs.some(p => range(p, a) > 2 || range(p, b) > 2)) continue;
                 const options = [];
                 for (let y = Math.max(a.y - 2, b.y - 2); y <= Math.min(a.y + 2, b.y + 2); y++)
                     for (let x = Math.max(a.x - 2, b.x - 2); x <= Math.min(a.x + 2, b.x + 2); x++) {
@@ -178,8 +183,8 @@ function plan(input, seed = {entries: []}) {
                         if (freeTiles.has(idx(p)) && idx(p) !== idx(a) && idx(p) !== idx(b)) options.push(p);
                     }
                 options.sort((p, q) => score(p) - score(q) || p.y - q.y || p.x - q.x);
-                if (existingOutputs.length + options.length < 8) continue;
-                const outputs = existingOutputs.concat(options.slice(0, 8 - existingOutputs.length));
+                if (existingOutputs.length + options.length < outputsWanted) continue;
+                const outputs = existingOutputs.concat(options.slice(0, outputsWanted - existingOutputs.length));
                 const cluster = [a, b].concat(outputs);
                 const withCluster = new Set(blocking);
                 for (const p of cluster) withCluster.add(idx(p));

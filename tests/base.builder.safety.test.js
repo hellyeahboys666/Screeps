@@ -19,7 +19,7 @@ function entry(type = 'extension', x = 20, y = 20, extra = {}) {
 function ready(f = fixture(), entries = [entry()]) {
     const sim = new Simulation(f, {sources, mode: 'place'});
     const anchor = f.objects.find(o => o.type === 'spawn');
-    Object.assign(sim.state, {planVersion: 2, generatedTick: sim.tick - 1,
+    Object.assign(sim.state, {planVersion: 3, generatedTick: sim.tick - 1,
         plan: {valid: true, blockers: [], entries, anchorId: anchor._id, anchorPos: {x: anchor.x, y: anchor.y}}});
     return sim;
 }
@@ -202,7 +202,7 @@ test('old plan versions fail closed until explicit observe replan', () => {
     assert.strictEqual(sim.run()[0].status, 'needsObserveReplan');
     sim.state.mode = 'observe';
     assert.strictEqual(sim.run()[0].status, 'observing');
-    assert.strictEqual(sim.state.planVersion, 2);
+    assert.strictEqual(sim.state.planVersion, 3);
     assert.strictEqual(sim.attempts.length, 0);
 });
 test('existing reaction-lab geometry cannot fit ten without replacement (E9S18)', () => {

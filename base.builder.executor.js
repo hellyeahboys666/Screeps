@@ -287,4 +287,11 @@ function execute(room, snapshot, plan, options) {
     }
     return {status: waiting ? 'deferred' : 'complete'};
 }
-module.exports = {execute: execute, typeLimit: typeLimit};
+// Final (RCL8) count the policy allows; the planner reserves space only for this.
+function planLimit(room, type) {
+    var official = CONTROLLER_STRUCTURES[type] && CONTROLLER_STRUCTURES[type][8];
+    if (!Number.isInteger(official)) return 0;
+    var limit = policyValue(room, 'typeLimits', type, defaultLimit(type, 8, official));
+    return Number.isInteger(limit) && limit >= 0 ? Math.min(official, limit) : 0;
+}
+module.exports = {execute: execute, typeLimit: typeLimit, planLimit: planLimit};

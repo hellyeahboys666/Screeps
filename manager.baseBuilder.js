@@ -1,5 +1,7 @@
 // Room-level lifecycle. Deliberately inert until a room mode or new-room policy is set.
-var PLAN_VERSION = 2;
+var PLAN_VERSION = 3;
+// Types whose planned count follows typeLimits (space is reserved only for these).
+var PLANNED_TYPES = ['extension', 'spawn', 'tower', 'lab', 'factory', 'powerSpawn', 'observer', 'nuker'];
 function result(state, status, detail) {
     state.status = status;
     state.lastChecked = Game.time;
@@ -114,15 +116,31 @@ function run(room, deps) {
         return result(state, 'anchorChanged');
     }
     if (state.plan && state.planVersion !== PLAN_VERSION) return result(state, 'versionMismatch');
+    var limits = {};
+    for (var type of PLANNED_TYPES) limits[type] = deps.executor.planLimit(room, type);
+    // Raising typeLimits for a planned type past what the plan reserved re-plans in
+    // place (planning never moves or removes anything that exists). Lowering needs
+    // no new plan: the executor enforces the lower cap when placing.
+    if (state.plan && state.plan.limits && PLANNED_TYPES.some(function(t) {
+        return limits[t] > (state.plan.limits[t] || 0);
+    })) {
+        delete state.plan;
+        delete state.generatedTick;
+        state.replannedForLimits = Game.time;
+    }
     if (!state.plan) {
         if (Number.isInteger(state.retryAfter) && Game.time < state.retryAfter) {
             return result(state, 'retryCooldown');
         }
         if (!Game.cpu || Game.cpu.bucket < 8000) return result(state, 'lowBucket');
+        // Planning a fresh room can take a few hundred CPU; only start it with
+        // headroom left in this tick so it can never push the tick into a timeout.
+        if (typeof Game.cpu.getUsed === 'function' && Number.isFinite(Game.cpu.tickLimit)
+            && Game.cpu.tickLimit - Game.cpu.getUsed() < 350) return result(state, 'cpuHeadroom');
         var snap = deps.survey.survey(room);
         if (!snap.eligible) return result(state, 'ineligible', snap.reason);
         var proposal = deps.compose.compose(snap, deps,
-            {perimeter: false, extensionLimit: 60});
+            {perimeter: false, extensionLimit: 60, limits: limits});
         if (!proposal.valid) {
             state.lastBlockers = proposal.blockers.slice(0, 8);
             state.retryAfter = Game.time + 500;
@@ -130,6 +148,7 @@ function run(room, deps) {
         }
         delete state.retryAfter;
         proposal.anchorPos = {x: snap.anchor.pos.x, y: snap.anchor.pos.y};
+        proposal.limits = limits;
         state.plan = proposal;
         state.planVersion = PLAN_VERSION;
         state.generatedTick = Game.time;
