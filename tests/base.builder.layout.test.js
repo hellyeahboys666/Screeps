@@ -92,4 +92,12 @@ for (const room of ['E9S18', 'E9S19', 'E7S18']) {
         assert(Math.max(...towers) <= LIMITS.towerMaxWalk, 'tower walk ' + Math.max(...towers));
     });
 }
+test('lab caps of 1 and 2 plan that many labs (boost-only rooms)', () => {
+    const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/base-builder', 'E9S19.fresh.json')));
+    for (const cap of [1, 2]) {
+        const sim = new Simulation(fixture, {mode: 'observe', roomLimits: {lab: cap}});
+        sim.run();
+        assert.strictEqual(sim.state.plan.entries.filter(e => e.type === 'lab').length, cap);
+    }
+});
 console.log('PASS: ' + passed + ' base-builder layout tests');

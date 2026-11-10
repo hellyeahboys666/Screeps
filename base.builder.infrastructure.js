@@ -149,9 +149,9 @@ function plan(input, seed = {entries: []}, limits) {
     const labs = existing.concat(seed.entries).filter(o => o.type === 'lab');
     // Reserve only the labs the policy will build (2 inputs + outputs).
     const labLimit = limits && Number.isInteger(limits.lab) ? Math.min(10, limits.lab) : 10;
-    const outputsWanted = labLimit - 2;
+    const outputsWanted = Math.max(0, labLimit - 2);
     if (labs.length > 10 || labs.some(o => o.my === false)) blockers.push('incompatibleExistingLabs');
-    else if (labLimit < 3 || labs.length >= labLimit) { /* nothing more to reserve */ }
+    else if (labLimit < 1 || labs.length >= labLimit) { /* nothing more to reserve */ }
     else {
         const locked = labs.map(o => o.pos).sort((a, b) => a.y - b.y || a.x - b.x);
         const free = [];
@@ -167,6 +167,10 @@ function plan(input, seed = {entries: []}, limits) {
         const freeTiles = new Set(free.map(idx));
         const byPosition = new Map(inputs.map((p, i) => [idx(p), i]));
         let selected;
+        // Prefer input pairs with room for a full ten-lab cluster, so raising the
+        // lab cap later can extend the same cluster; reserve only what the cap
+        // builds. Fall back to a cluster that fits just the capped count.
+        for (const room of outputsWanted < 8 ? [8, outputsWanted] : [8]) {
         outer: for (let i = 0; i < inputs.length; i++) {
             const a = inputs[i];
             for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
@@ -183,7 +187,7 @@ function plan(input, seed = {entries: []}, limits) {
                         if (freeTiles.has(idx(p)) && idx(p) !== idx(a) && idx(p) !== idx(b)) options.push(p);
                     }
                 options.sort((p, q) => score(p) - score(q) || p.y - q.y || p.x - q.x);
-                if (existingOutputs.length + options.length < outputsWanted) continue;
+                if (existingOutputs.length + options.length < room) continue;
                 const outputs = existingOutputs.concat(options.slice(0, outputsWanted - existingOutputs.length));
                 const cluster = [a, b].concat(outputs);
                 const withCluster = new Set(blocking);
@@ -196,9 +200,13 @@ function plan(input, seed = {entries: []}, limits) {
                 break outer;
             }
         }
+        if (selected) break;
+        }
         if (!selected) blockers.push('noFeasibleLabCluster');
         else {
-            for (const p of [selected.a, selected.b]) if (!locked.some(l => idx(l) === idx(p))) add('lab', 'labInput', p, 85);
+            // A cap of 1-2 labs (boosting only) builds just the input positions.
+            const ins = [selected.a, selected.b].slice(0, Math.max(1, Math.min(2, labLimit)));
+            for (const p of ins) if (!locked.some(l => idx(l) === idx(p))) add('lab', 'labInput', p, 85);
             for (const p of selected.outputs) if (!locked.some(l => idx(l) === idx(p))) add('lab', 'labOutput', p, 90);
         }
     }
