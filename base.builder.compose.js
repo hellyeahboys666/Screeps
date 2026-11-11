@@ -1,5 +1,6 @@
 // Pure composition; Screeps runtime passes in modules resolved by module name.
 var access = require('base.builder.access');
+var towers = require('base.builder.towers');
 function positionKey(pos) { return pos.y * 50 + pos.x; }
 function validateAccess(input, entries) {
     return access.create(input).check(entries);
@@ -77,10 +78,32 @@ function compose(input, deps, options) {
         blocked = validateAccess(input, staged);
     }
     if (blocked) critical.push(blocked);
-    var defense = deps.defense.planDefense(input, staged,
-        {perimeter: options.perimeter === true, maxCutTiles: options.maxCutTiles,
-            distanceWeight: options.distanceWeight, perimeterConfigs: options.perimeterConfigs});
+    var defenseOptions = {perimeter: options.perimeter === true, maxCutTiles: options.maxCutTiles,
+        distanceWeight: options.distanceWeight, perimeterConfigs: options.perimeterConfigs,
+        extensionBuffer: options.extensionBuffer};
+    var defense = deps.defense.planDefense(input, staged, defenseOptions);
+    // With a perimeter, re-place the planned (unbuilt) towers to maximise the damage
+    // on the weakest rampart, then re-plan the defense around the moved towers.
+    var towerPlan = null;
+    if (defense.perimeterSupported && options.placeTowers !== false) {
+        var cutKeys = (defense.entries || []).filter(function(e) { return e.purpose === 'perimeter'; })
+            .map(function(e) { return e.pos.y * 50 + e.pos.x; });
+        towerPlan = towers.placeTowers(input, staged, cutKeys);
+        if (towerPlan.moved && !validateAccess(input, towerPlan.entries)) {
+            var retry = deps.defense.planDefense(input, towerPlan.entries, defenseOptions);
+            if (retry.perimeterSupported) { staged = towerPlan.entries; defense = retry; }
+            else towerPlan = null;
+        }
+    }
     warnings.push.apply(warnings, defense.blockers || []);
+    // Defenders and repairers must reach every perimeter rampart from the storage
+    // side of the base (a walkable tile next to it, inside the wall).
+    var perimeterEntries = (defense.entries || []).filter(function(e) { return e.purpose === 'perimeter'; });
+    if (perimeterEntries.length) {
+        var reach = access.flood(input, access.obstacles(input, staged), access.hubOf(input, staged));
+        var unreachable = perimeterEntries.filter(function(e) { return !access.seat(reach, e.pos, 1); }).length;
+        if (unreachable) warnings.push('perimeterRampartUnreachable:' + unreachable);
+    }
     var entries = staged.concat(defense.entries || []);
     var collision = overlapping(entries, input);
     if (collision) critical.push(collision);
@@ -94,7 +117,8 @@ function compose(input, deps, options) {
         entries: critical.length ? [] : entries,
         blockers: critical, warnings: warnings,
         perimeterSupported: !!defense.perimeterSupported,
-        perimeter: defense.perimeter || null
+        perimeter: defense.perimeter ? Object.assign({}, defense.perimeter, towerPlan && towerPlan.moved
+            ? {towersMoved: towerPlan.moved, minDamageBefore: towerPlan.before, minDamage: towerPlan.minDamage} : {}) : null
     };
 }
 module.exports = {compose: compose};

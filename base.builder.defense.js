@@ -74,7 +74,7 @@ function accessBlocker(input, passable) {
 // Configurations are tried from strongest to weakest; the first whose cut fits
 // the tile budget wins.
 // ---------------------------------------------------------------------------
-const TILE_COST = 10, BUILT_TILE_COST = 14, BIG = 1 << 28, DISTANCE_WEIGHT = 0.5;
+const TILE_COST = 10, BUILT_TILE_COST = 14, BIG = 1 << 28, DISTANCE_WEIGHT = 1;
 const UNPROTECTED = new Set(['road', 'container', 'rampart', 'constructedWall', 'extractor']);
 const STEPS = [-51, -50, -49, -1, 1, 49, 50, 51];
 
@@ -145,7 +145,7 @@ function maxFlowCut(open, core, cost, budget) {
         for (let v = 0; v < N; v++) iter[v] = first[v];
         flow += augment();
         if (flow >= BIG) return {reason: 'uncuttable'};
-        if (flow > budget * (BUILT_TILE_COST + 30)) return {reason: 'overBudget'};
+        if (flow > budget * (BUILT_TILE_COST + 50)) return {reason: 'overBudget'};
     }
     // Source side of the residual graph; cut = tiles whose in-node is reached but out-node is not.
     const seen = new Uint8Array(N);
@@ -200,17 +200,11 @@ function planPerimeter(input, layout, options) {
     for (const o of existing.concat(input.sites, layout)) {
         if (o && o.type !== 'road' && o.type !== 'rampart') built[index(o.pos)] = 1;
     }
-    // Distance penalty: ramparts far from the base get weaker tower support and a
-    // longer walk for defenders/repairers, so a slightly longer line close to
-    // the base beats a short one across a distant choke point.
-    const hub = (existing.concat(layout).find(o => o && o.type === 'storage') || input.anchor).pos;
     const weight = options.distanceWeight === undefined ? DISTANCE_WEIGHT : options.distanceWeight;
-    const cost = new Int32Array(CELLS);
-    for (let i = 0; i < CELLS; i++) {
-        const p = pos(i);
-        const far = Math.max(0, range(p, hub) - 8);
-        cost[i] = interior(p.x, p.y) ? (built[i] ? BUILT_TILE_COST : TILE_COST) + Math.floor(far * weight) : BIG;
-    }
+    // Extensions are cheap to rebuild: by default they only need to be out of melee
+    // reach (buffer 1), not ranged reach, which keeps the wall much shorter.
+    // Key structures (spawn, storage, towers, labs, ...) keep the full buffer.
+    const extensionBuffer = Number.isInteger(options.extensionBuffer) ? options.extensionBuffer : 1;
     const configs = options.perimeterConfigs || [
         {buffer: 3, controller: true}, {buffer: 3, controller: false},
         {buffer: 2, controller: true}, {buffer: 2, controller: false}, {buffer: 1, controller: false}];
@@ -221,9 +215,29 @@ function planPerimeter(input, layout, options) {
             for (let y = Math.max(0, c.y - r); y <= Math.min(49, c.y + r); y++)
                 for (let x = Math.max(0, c.x - r); x <= Math.min(49, c.x + r); x++) if (open[y * 50 + x]) core[y * 50 + x] = 1;
         };
-        for (const o of protect) mark(o.pos, config.buffer);
+        for (const o of protect) mark(o.pos, o.type === 'extension' ? Math.min(config.buffer, extensionBuffer) : config.buffer);
         mark(input.anchor.pos, config.buffer);
         if (config.controller) mark(input.controller.pos, 1);
+        // Cost grows with flood depth from the protected area: a slightly longer line
+        // hugging the base beats a short one across a distant choke point (weaker tower
+        // support, longer walks for defenders and repairers).
+        const depth = new Uint16Array(CELLS).fill(65535), queue = new Int32Array(CELLS);
+        let h = 0, t = 0;
+        for (let i = 0; i < CELLS; i++) if (core[i]) { depth[i] = 0; queue[t++] = i; }
+        while (h < t) {
+            const i = queue[h++], x = i % SIZE;
+            for (const d of STEPS) {
+                const n = i + d;
+                if (n < 0 || n >= CELLS || Math.abs(n % SIZE - x) > 1 || !open[n] || depth[n] !== 65535) continue;
+                depth[n] = depth[i] + 1; queue[t++] = n;
+            }
+        }
+        const cost = new Int32Array(CELLS);
+        for (let i = 0; i < CELLS; i++) {
+            const p = pos(i);
+            cost[i] = interior(p.x, p.y)
+                ? (built[i] ? BUILT_TILE_COST : TILE_COST) + Math.floor(Math.max(0, depth[i] - 1) * weight) : BIG;
+        }
         const result = maxFlowCut(open, core, cost, budget);
         if (result.reason) { lastReason = 'perimeterUnsupported:' + result.reason + ':b' + config.buffer; continue; }
         if (result.cut.length > budget) { lastReason = 'perimeterUnsupported:overBudget:b' + config.buffer; continue; }

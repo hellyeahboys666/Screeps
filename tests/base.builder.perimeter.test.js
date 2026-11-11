@@ -79,11 +79,12 @@ test('own structures are not barriers: a ring of extensions still gets ramparts'
     const result = planPerimeter(input, ring, {maxCutTiles: 150});
     assert(!result.reason, result.reason);
     assert(result.cut.length > 0);
-    for (const e of ring) assert.strictEqual(exposed(input, new Set(result.cut), e.pos, result.config.buffer), false);
+    // Extensions only need to be out of melee reach by default (extensionBuffer 1).
+    for (const e of ring) assert.strictEqual(exposed(input, new Set(result.cut), e.pos, 1), false);
 });
 
 for (const name of ['E9S18', 'E9S19', 'E7S18']) {
-    test(name + ' fresh: perimeter keeps every planned structure out of ranged reach', () => {
+    test(name + ' fresh: perimeter keeps key structures out of ranged reach, extensions out of melee', () => {
         const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/base-builder', name + '.fresh.json')));
         const sim = new Simulation(fixture, {mode: 'observe'});
         sim.memory.baseBuilder.perimeter = true;
@@ -93,13 +94,19 @@ for (const name of ['E9S18', 'E9S19', 'E7S18']) {
         assert(plan && plan.valid && plan.perimeterPlanned, 'plan with perimeter');
         const cut = plan.entries.filter(e => e.purpose === 'perimeter');
         assert(cut.length > 0 && cut.length <= 60, 'cut ' + cut.length);
+        assert.strictEqual(plan.perimeter.buffer, 3);
+        assert(!plan.warnings.some(w => String(w).startsWith('perimeterRampartUnreachable')), JSON.stringify(plan.warnings));
+        // Towers are re-placed after the cut and never make the weakest rampart weaker.
+        if (plan.perimeter.towersMoved) assert(plan.perimeter.minDamage > plan.perimeter.minDamageBefore);
         const terrain = Array.from(fixture.terrain, c => Number(c) & 1);
         const blocked = new Set(cut.map(e => e.pos.y * 50 + e.pos.x));
         for (const o of fixture.objects) if (['source', 'mineral', 'controller'].includes(o.type)) blocked.add(o.y * 50 + o.x);
         const input = {terrain};
         for (const e of plan.entries.filter(e => !['road', 'container', 'rampart', 'extractor'].includes(e.type)
             && !(e.type === 'link' && String(e.purpose).startsWith('sourceLink')))) {
-            assert.strictEqual(exposed(input, blocked, e.pos, 3), false, e.type + ' exposed at ' + JSON.stringify(e.pos));
+            // Key structures: out of ranged reach (3). Extensions: out of melee reach (1).
+            const reach = e.type === 'extension' ? 1 : 3;
+            assert.strictEqual(exposed(input, blocked, e.pos, reach), false, e.type + ' exposed at ' + JSON.stringify(e.pos));
         }
     });
 }
