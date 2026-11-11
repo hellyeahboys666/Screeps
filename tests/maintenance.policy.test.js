@@ -135,6 +135,8 @@ function loadMainMaintenanceHarness() {
         + 'isTowerMaintenanceTarget: isTowerMaintenanceTarget,'
         + 'getRoomTowerMaintenanceTargets: getRoomTowerMaintenanceTargets,'
         + 'shouldTowerPerformMaintenance: shouldTowerPerformMaintenance,'
+        + 'getRoomTowerDecayRescueTargets: getRoomTowerDecayRescueTargets,'
+        + 'shouldTowerPerformDecayRescue: shouldTowerPerformDecayRescue,'
         + 'shouldTowerPerformRampartMaintenance: typeof shouldTowerPerformRampartMaintenance === "function" ? shouldTowerPerformRampartMaintenance : undefined,'
         + 'updateRampartRepairStatus: updateRampartRepairStatus,'
         + 'runTowerDefense: runTowerDefense,'
@@ -264,8 +266,28 @@ function makeRoom(level, structures) {
         [],
         []
     );
-    assert.deepStrictEqual(lowRclRepairs, []);
-    assert.notStrictEqual(summaryLowRcl.action, 'repairMaintenance');
+    // Below RCL6 there is no ordinary maintenance, but a road under half its
+    // hits is rescued: nothing else would repair it before it decays away.
+    assert.deepStrictEqual(lowRclRepairs, ['road']);
+    assert.strictEqual(summaryLowRcl.action, 'repairDecayRescue');
+
+    harness.sandbox.Game.time++;
+    const scuffedRoad = {id: 'scuffedRoad', structureType: 'road', hits: 3000, hitsMax: 5000};
+    const lowContainer = {id: 'lowContainer', structureType: 'container', hits: 50000, hitsMax: 250000};
+    const room4 = makeRoom(4, [scuffedRoad, lowContainer]);
+    assert.deepStrictEqual(
+        api.getRoomTowerDecayRescueTargets(room4).map(function(structure) { return structure.id; }),
+        ['lowContainer'], 'only structures under half hits are rescued below RCL6');
+    assert.strictEqual(api.getRoomTowerDecayRescueTargets(room6).length, 0,
+        'RCL6+ rooms use ordinary maintenance instead of the rescue tier');
+    assert.strictEqual(api.shouldTowerPerformDecayRescue(room4, makeTower(599, []), lowContainer, []), false);
+    assert.strictEqual(api.shouldTowerPerformDecayRescue(room4, makeTower(600, []), lowContainer, [{}]), false);
+    const rescueRepairs = [];
+    const summaryRescue = api.runTowerDefense(room4,
+        [makeTower(1000, rescueRepairs), makeTower(1000, rescueRepairs)], [], [], []);
+    assert.deepStrictEqual(rescueRepairs, ['lowContainer'],
+        'a second tower must not pile onto the same rescue target or repair a merely scuffed road');
+    assert.strictEqual(summaryRescue.action, 'repairDecayRescue');
 })();
 
 (function testEstablishedRampartsUseTowerForNormalDecay() {

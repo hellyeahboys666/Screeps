@@ -1,5 +1,6 @@
 var remoteDanger = require('remote.danger');
 var depotUtils = require('remote.build.depot');
+var decayRepair = require('maintenance.decay');
 
 var DEFAULT_HOME_TERMINAL_RESERVE = 20000;
 var DEFAULT_HOME_STORAGE_RESERVE = 30000;
@@ -632,6 +633,13 @@ function buildOrUpgrade(creep)
         return;
     }
 
+    // A claimed room has no tower yet: keep its depot container and roads alive.
+    var creepRepairRoom = decayRepair.needsCreepRepair(creep.room);
+    if (creepRepairRoom && decayRepair.run(creep, decayRepair.CRITICAL_RATIO))
+    {
+        return;
+    }
+
     // Re-rank sites every 20 ticks instead of path-searching on every build tick.
     var target = creep.memory.buildTargetId ? Game.getObjectById(creep.memory.buildTargetId) : null;
     if (!target || (creep.memory.buildTargetUntil || 0) < Game.time)
@@ -650,6 +658,10 @@ function buildOrUpgrade(creep)
         return;
     }
 
+    if (creepRepairRoom && decayRepair.run(creep, decayRepair.REPAIR_RATIO))
+    {
+        return;
+    }
     upgradeController(creep);
 }
 

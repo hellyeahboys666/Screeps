@@ -3,6 +3,7 @@ var roleRepairer = require('role.repairer');
 var energyFallback = require('energy.fallback');
 var depotUtils = require('remote.build.depot');
 var workPosition = require('work.position');
+var decayRepair = require('maintenance.decay');
 var CONTROLLER_DOWNGRADE_SAFETY_TICKS = 5000;
 
 function getExitMoveDirection(exit)
@@ -233,6 +234,13 @@ var roleBuilder = {
                 emergencyUpgrade(creep);
                 return;
             }
+            // With no tower in the room, builders are the only repairers: save
+            // a nearly-decayed road or container before building the next site.
+            var creepRepairRoom = decayRepair.needsCreepRepair(creep.room);
+            if (creepRepairRoom && decayRepair.run(creep, decayRepair.CRITICAL_RATIO))
+            {
+                return;
+            }
             var constructionSite = findBuildTarget(creep);
             if (constructionSite != undefined)
             {
@@ -245,6 +253,10 @@ var roleBuilder = {
                 {
                     workPosition.holdWorkPosition(creep, constructionSite, 3);
                 }
+            }
+            else if (creepRepairRoom && decayRepair.run(creep, decayRepair.REPAIR_RATIO))
+            {
+                return;
             }
             else
             {

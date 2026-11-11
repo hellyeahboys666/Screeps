@@ -340,7 +340,8 @@ function loadCompletedRole(fileName, status) {
         module: {exports: {}},
         exports: {},
         require: function(name) {
-            if (name == 'remote.danger' || name == 'remote.build.depot') return {};
+            if (name == 'remote.danger' || name == 'remote.build.depot'
+                || name == 'maintenance.decay') return {};
             throw new Error('unexpected require: ' + name);
         },
         Memory: {remoteBuildMissionStatus: {mission: status}},

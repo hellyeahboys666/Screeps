@@ -1,5 +1,6 @@
 var remoteDanger = require('remote.danger');
 var remoteMining = require('manager.remoteMining');
+var decayRepair = require('maintenance.decay');
 
 function getUsedEnergy(creep)
 {
@@ -267,6 +268,12 @@ var rolelongDistanceHarvester = {
         }
 
         var container = findSourceContainer(creep, source);
+
+        // Nothing else repairs a remote container; patch it from carried energy.
+        if (decayRepair.repairOwnContainer(creep, container))
+        {
+            return;
+        }
 
         if (unloadIfFull(creep, container))
         {

@@ -44,6 +44,9 @@ var TOWER_RAMPART_EMERGENCY_REPAIR_HITS = 1000;
 var TOWER_RAMPART_REPAIR_ENERGY_RESERVE = 300;
 var TOWER_MAINTENANCE_MIN_RCL = 6;
 var TOWER_MAINTENANCE_ENERGY_RESERVE = 600;
+// Below RCL6 towers skip ordinary maintenance to save energy, but nothing else
+// repairs roads and containers there, so they rescue anything under half hits.
+var TOWER_DECAY_RESCUE_RATIO = 0.5;
 var RAMPART_REPAIRER_RESTART_RATIO = 0.95;
 var TOWER_CRITICAL_HEAL_RATIO = 0.45;
 var DEFAULT_RAMPART_TARGET_HITS = 100000;
@@ -2290,6 +2293,43 @@ function shouldTowerPerformMaintenance(room, tower, maintenanceTarget, hostiles)
     return getTowerEnergy(tower) >= TOWER_MAINTENANCE_ENERGY_RESERVE;
 }
 
+function getRoomTowerDecayRescueTargets(room)
+{
+    if (!room || !room.controller || !room.controller.my
+        || room.controller.level >= TOWER_MAINTENANCE_MIN_RCL)
+    {
+        return [];
+    }
+    var cache = getRoomTickCache(room);
+    if (cache && cache.towerDecayRescueTargets)
+    {
+        return cache.towerDecayRescueTargets;
+    }
+    var targets = room.find(FIND_STRUCTURES, {
+        filter: (structure) => isTowerMaintenanceTarget(structure)
+            && structure.hits < structure.hitsMax * TOWER_DECAY_RESCUE_RATIO
+    });
+    targets.sort(function(a, b) {
+        return a.hits / a.hitsMax - b.hits / b.hitsMax || a.hits - b.hits;
+    });
+    if (cache)
+    {
+        cache.towerDecayRescueTargets = targets;
+    }
+    return targets;
+}
+
+function shouldTowerPerformDecayRescue(room, tower, target, hostiles)
+{
+    if (!room || !room.controller || !room.controller.my
+        || room.controller.level >= TOWER_MAINTENANCE_MIN_RCL
+        || !tower || !target || (hostiles && hostiles.length > 0))
+    {
+        return false;
+    }
+    return getTowerEnergy(tower) >= TOWER_MAINTENANCE_ENERGY_RESERVE;
+}
+
 function shouldTowerPerformRampartMaintenance(room, tower, rampart, hostiles)
 {
     if (!rampart || rampart.structureType != STRUCTURE_RAMPART)
@@ -2410,6 +2450,9 @@ function runTowerDefense(room, towers, hostiles, decayingRamparts, creepsInRoom,
         ? rampartMaintenanceTargets[0] : undefined;
     var maintenanceTargets = (!hostiles || hostiles.length == 0)
         ? getRoomTowerMaintenanceTargets(room) : [];
+    var decayRescueTargets = (!hostiles || hostiles.length == 0)
+        ? getRoomTowerDecayRescueTargets(room) : [];
+    var decayRescueIndex = 0;
     // Each maintaining tower takes the next target instead of all hitting the first.
     var maintenanceIndex = 0;
     var orderedTowers = activeTowers.slice();
@@ -2495,6 +2538,14 @@ function runTowerDefense(room, towers, hostiles, decayingRamparts, creepsInRoom,
             summary.action = 'repairMaintenance';
             summary.repairTarget = maintenanceTarget.id;
             summary.repairHits = maintenanceTarget.hits;
+        }
+        else if (shouldTowerPerformDecayRescue(room, tower, decayRescueTargets[decayRescueIndex], hostiles))
+        {
+            var decayRescueTarget = decayRescueTargets[decayRescueIndex++];
+            tower.repair(decayRescueTarget);
+            summary.action = 'repairDecayRescue';
+            summary.repairTarget = decayRescueTarget.id;
+            summary.repairHits = decayRescueTarget.hits;
         }
     }
     updateTowerDefenseMemory(room, summary);
