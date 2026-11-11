@@ -121,6 +121,16 @@ function run(room, deps) {
     // Raising typeLimits for a planned type past what the plan reserved re-plans in
     // place (planning never moves or removes anything that exists). Lowering needs
     // no new plan: the executor enforces the lower cap when placing.
+    var perimeterOn = deps.executor.perimeterEnabled ? deps.executor.perimeterEnabled(room) : false;
+    var maxCutTiles = Number.isInteger(config.maxCutTiles) ? Math.max(1, Math.min(150, config.maxCutTiles)) : 60;
+    // Turning the perimeter on (or changing its tile budget) re-plans in place to add it;
+    // turning it off needs nothing (the executor stops placing perimeter ramparts).
+    if (state.plan && state.plan.limits && perimeterOn
+        && (!state.plan.perimeterPlanned || state.plan.perimeterBudget !== maxCutTiles)) {
+        delete state.plan;
+        delete state.generatedTick;
+        state.replannedForPerimeter = Game.time;
+    }
     if (state.plan && state.plan.limits && PLANNED_TYPES.some(function(t) {
         return limits[t] > (state.plan.limits[t] || 0);
     })) {
@@ -140,7 +150,7 @@ function run(room, deps) {
         var snap = deps.survey.survey(room);
         if (!snap.eligible) return result(state, 'ineligible', snap.reason);
         var proposal = deps.compose.compose(snap, deps,
-            {perimeter: false, extensionLimit: 60, limits: limits});
+            {perimeter: perimeterOn, maxCutTiles: maxCutTiles, extensionLimit: 60, limits: limits});
         if (!proposal.valid) {
             state.lastBlockers = proposal.blockers.slice(0, 8);
             state.retryAfter = Game.time + 500;
@@ -149,6 +159,8 @@ function run(room, deps) {
         delete state.retryAfter;
         proposal.anchorPos = {x: snap.anchor.pos.x, y: snap.anchor.pos.y};
         proposal.limits = limits;
+        proposal.perimeterPlanned = perimeterOn;
+        proposal.perimeterBudget = maxCutTiles;
         state.plan = proposal;
         state.planVersion = PLAN_VERSION;
         state.generatedTick = Game.time;
@@ -166,7 +178,8 @@ function run(room, deps) {
     var mySites = room.find(typeof FIND_MY_CONSTRUCTION_SITES !== 'undefined'
         ? FIND_MY_CONSTRUCTION_SITES : 'myConstructionSites');
     var wake = room.controller.level + ':' + (Array.isArray(mySites) ? mySites.length : -1) + ':'
-        + JSON.stringify([config.typeLimits, state.typeLimits, config.minRcl, state.minRcl]);
+        + JSON.stringify([config.typeLimits, state.typeLimits, config.minRcl, state.minRcl,
+            config.perimeter, state.perimeter]);
     if ((state.status === 'complete' || state.status === 'deferred')
         && Number.isInteger(state.lastExecuteTick) && Game.time - state.lastExecuteTick < 50
         && state.lastExecuteWake === wake) {

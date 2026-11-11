@@ -35,11 +35,12 @@ function planExtensions(input, seed, requested) {
             var rr = Math.max(Math.abs(rx - r.x), Math.abs(ry - r.y));
             if (rr < roadNear[ry * 50 + rx]) roadNear[ry * 50 + rx] = rr;
         }
+    var exitBand = access.nearExit(input);
     var candidates=[];
     var parity = hub ? (hub.x + hub.y + 1) & 1 : (input.anchor.pos.x + input.anchor.pos.y) & 1;
     for (var y=2;y<=47;y++) for (var x=2;x<=47;x++) {
         var p={x,y}, i=index(x,y), d=walk ? walk[i] : range(p,input.anchor.pos);
-        if (input.terrain[i] === 1 || occupied.has(i) || d > (walk ? 25 : 15)
+        if (input.terrain[i] === 1 || occupied.has(i) || exitBand[i] || d > (walk ? 25 : 15)
             || input.sources.some(s => range(p,s.pos)<=1)
             || range(p,input.controller.pos)<=3) continue;
         // A one-tile corridor is an access lane, not extension space.

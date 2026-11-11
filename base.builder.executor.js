@@ -33,6 +33,20 @@ function policyValue(room, key, type, fallback) {
     }
     return value;
 }
+// Perimeter ramparts (purpose 'perimeter') are opt-in: Memory.baseBuilder.perimeter
+// or room.memory.baseBuilder.perimeter (room wins), placed from minRcl.perimeter
+// (default 5) once the base can afford their upkeep.
+function perimeterEnabled(room) {
+    var config = typeof Memory !== 'undefined' && Memory.baseBuilder;
+    var state = room.memory && room.memory.baseBuilder;
+    if (state && typeof state.perimeter === 'boolean') return state.perimeter;
+    return !!(config && config.perimeter === true);
+}
+function perimeterAllowed(room) {
+    if (!perimeterEnabled(room)) return false;
+    var minRcl = policyValue(room, 'minRcl', 'perimeter', 5);
+    return Number.isInteger(minRcl) && room.controller.level >= minRcl;
+}
 function typeLimit(room, type) {
     var level = room.controller.level;
     var official = CONTROLLER_STRUCTURES[type] && CONTROLLER_STRUCTURES[type][level];
@@ -235,6 +249,7 @@ function execute(room, snapshot, plan, options) {
         })) continue;
         // Future vital overlays must wait for the real underlying structure,
         // including types intentionally disabled by policy or future RCL caps.
+        if (entry.purpose === 'perimeter' && !perimeterAllowed(room)) { waiting = true; continue; }
         if (entry.requiresType && !structures.some(function(o) {
             return o.my === true && o.structureType === entry.requiresType && same(o.pos, pos);
         })) { waiting = true; continue; }
@@ -294,4 +309,4 @@ function planLimit(room, type) {
     var limit = policyValue(room, 'typeLimits', type, defaultLimit(type, 8, official));
     return Number.isInteger(limit) && limit >= 0 ? Math.min(official, limit) : 0;
 }
-module.exports = {execute: execute, typeLimit: typeLimit, planLimit: planLimit};
+module.exports = {execute: execute, typeLimit: typeLimit, planLimit: planLimit, perimeterEnabled: perimeterEnabled};

@@ -78,7 +78,8 @@ function compose(input, deps, options) {
     }
     if (blocked) critical.push(blocked);
     var defense = deps.defense.planDefense(input, staged,
-        {perimeter: options.perimeter === true, maxCutTiles: options.maxCutTiles});
+        {perimeter: options.perimeter === true, maxCutTiles: options.maxCutTiles,
+            distanceWeight: options.distanceWeight, perimeterConfigs: options.perimeterConfigs});
     warnings.push.apply(warnings, defense.blockers || []);
     var entries = staged.concat(defense.entries || []);
     var collision = overlapping(entries, input);
@@ -92,7 +93,8 @@ function compose(input, deps, options) {
         valid: !critical.length, anchorId: input.anchor.id,
         entries: critical.length ? [] : entries,
         blockers: critical, warnings: warnings,
-        perimeterSupported: !!defense.perimeterSupported
+        perimeterSupported: !!defense.perimeterSupported,
+        perimeter: defense.perimeter || null
     };
 }
 module.exports = {compose: compose};

@@ -37,6 +37,25 @@ function openMask(input, blocked) {
     for (const i of blocked) if (i >= 0 && i < 2500) open[i] = 0;
     return open;
 }
+// Tiles within EXIT_CLEARANCE of an open exit tile. Base structures stay out of
+// this band so a perimeter (ramparts at 2..47) can still keep a 3-tile buffer
+// between attackers and every structure. Cached per snapshot.
+const EXIT_CLEARANCE = 5;
+const exitCache = new WeakMap();
+function nearExit(input) {
+    let mask = exitCache.get(input);
+    if (!mask) {
+        mask = new Uint8Array(2500);
+        for (let i = 0; i < 2500; i++) {
+            const x = i % 50, y = (i - x) / 50;
+            if (!(x === 0 || x === 49 || y === 0 || y === 49) || input.terrain[i]) continue;
+            for (let ny = Math.max(0, y - EXIT_CLEARANCE); ny <= Math.min(49, y + EXIT_CLEARANCE); ny++)
+                for (let nx = Math.max(0, x - EXIT_CLEARANCE); nx <= Math.min(49, x + EXIT_CLEARANCE); nx++) mask[ny * 50 + nx] = 1;
+        }
+        exitCache.set(input, mask);
+    }
+    return mask;
+}
 function hubOf(input, entries) {
     const bank = input.structures.concat(input.sites, entries || []).find(o => o && o.type === 'storage');
     return bank ? bank.pos : null;
@@ -142,4 +161,4 @@ function create(input) {
     }
     return {check};
 }
-module.exports = {create, obstacles, flood, seat, passable, hubOf, walkDistance};
+module.exports = {create, obstacles, flood, seat, passable, hubOf, walkDistance, nearExit};

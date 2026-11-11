@@ -35,7 +35,8 @@ function planExpansion(input,seed,limits) {
     // Tiles never used for these structures, computed once: walls, source and
     // mineral seats, and the controller's upgrade area.
     const excluded=new Uint8Array(2500);
-    for(let i=0;i<2500;i++)if(input.terrain[i])excluded[i]=1;
+    const exitBand=access.nearExit(input);
+    for(let i=0;i<2500;i++)if(input.terrain[i]||exitBand[i])excluded[i]=1;
     const mark=(c,r)=>{for(let y=Math.max(0,c.y-r);y<=Math.min(49,c.y+r);y++)
         for(let x=Math.max(0,c.x-r);x<=Math.min(49,c.x+r);x++)excluded[y*50+x]=1;};
     for(const s of input.sources)mark(s.pos,2);
