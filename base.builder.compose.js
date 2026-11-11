@@ -22,12 +22,12 @@ function overlapping(entries, input) {
     }
     return null;
 }
-function compose(input, deps, options) {
+function composeLayout(input, deps, options) {
     options = options || {};
-    var core = deps.core.plan(input, options.limits);
+    var core = deps.core.plan(input, options.limits, {layout: options.extensionLayout});
     if (!core.valid) return {valid: false, reason: 'invalidCore', entries: [], blockers: core.blockers, warnings: []};
     var warnings = [], critical = [];
-    var advanced = deps.infrastructure.plan(input, core, options.limits);
+    var advanced = deps.infrastructure.plan(input, core, options.limits, {layout: options.extensionLayout});
     var infraEntries = advanced.entries || [];
     warnings.push.apply(warnings, advanced.blockers || []);
     var roads = deps.paths.connectRoads(input, core.entries.concat(infraEntries));
@@ -48,7 +48,7 @@ function compose(input, deps, options) {
         roads = deps.paths.connectRoads(input, core.entries);
         base = core.entries.concat(roads.entries);
     }
-    var expansion = deps.expansion.planExpansion(input, base, options.limits);
+    var expansion = deps.expansion.planExpansion(input, base, options.limits, {layout: options.extensionLayout});
     var extraEntries = expansion.entries || [];
     warnings.push.apply(warnings, expansion.blockers || []);
     // Reserve connectors to future storage/spawns before extensions can occupy
@@ -58,7 +58,8 @@ function compose(input, deps, options) {
     base = base.concat(extraRoads.entries);
     var extensions = deps.extensions.planExtensions(input, base.concat(extraEntries),
         options.limits && Number.isInteger(options.limits.extension)
-            ? Math.min(options.extensionLimit || 60, options.limits.extension) : options.extensionLimit);
+            ? Math.min(options.extensionLimit || 60, options.limits.extension) : options.extensionLimit,
+        {layout: options.extensionLayout});
     warnings.push.apply(warnings, extensions.blockers || []);
     var staged = base.concat(extraEntries, extensions.entries);
     var blocked = validateAccess(input, staged);
@@ -88,7 +89,13 @@ function compose(input, deps, options) {
     if (defense.perimeterSupported && options.placeTowers !== false) {
         var cutKeys = (defense.entries || []).filter(function(e) { return e.purpose === 'perimeter'; })
             .map(function(e) { return e.pos.y * 50 + e.pos.x; });
-        towerPlan = towers.placeTowers(input, staged, cutKeys);
+        // Keep the extension layout's walking lanes clear: grid lanes, or the
+        // off-colour checkerboard tiles.
+        var hubPos = access.hubOf(input, staged);
+        var isLane = options.extensionLayout === 'checker'
+            ? (hubPos ? function(x, y) { return ((x + y) & 1) === ((hubPos.x + hubPos.y) & 1); } : null)
+            : access.laneOf(hubPos, options.extensionLayout);
+        towerPlan = towers.placeTowers(input, staged, cutKeys, {barrierKeys: defense.barrierKeys, isLane: isLane});
         if (towerPlan.moved && !validateAccess(input, towerPlan.entries)) {
             var retry = deps.defense.planDefense(input, towerPlan.entries, defenseOptions);
             if (retry.perimeterSupported) { staged = towerPlan.entries; defense = retry; }
@@ -120,5 +127,39 @@ function compose(input, deps, options) {
         perimeter: defense.perimeter ? Object.assign({}, defense.perimeter, towerPlan && towerPlan.moved
             ? {towersMoved: towerPlan.moved, minDamageBefore: towerPlan.before, minDamage: towerPlan.minDamage} : {}) : null
     };
+}
+// Mean walking steps from the storage to the extensions' nearest free neighbour.
+function extensionWalk(input, plan) {
+    var built = plan.entries.filter(function(e) { return e.type !== 'rampart'; });
+    var hub = access.hubOf(input, built);
+    var exts = built.filter(function(e) { return e.type === 'extension'; });
+    if (!hub || !exts.length) return Infinity;
+    var dist = access.walkDistance(input, access.obstacles(input, built), hub), total = 0;
+    for (var e of exts) {
+        var best = 65535;
+        for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+            var i = (e.pos.y + dy) * 50 + e.pos.x + dx;
+            if ((dx || dy) && i >= 0 && i < 2500 && dist[i] < best) best = dist[i];
+        }
+        total += best;
+    }
+    return total / exts.length;
+}
+// extensionLayout 'grid' | 'checker' | 'auto' (default): auto plans both and keeps
+// the valid plan whose extensions are the shorter walk from the storage
+// (the grid wins in open rooms; the checkerboard in cramped ones).
+function compose(input, deps, options) {
+    options = options || {};
+    var layout = options.extensionLayout || 'auto';
+    if (layout !== 'auto') return composeLayout(input, deps, options);
+    var best = null;
+    for (var candidate of ['grid', 'checker']) {
+        var plan = composeLayout(input, deps, Object.assign({}, options, {extensionLayout: candidate}));
+        if (!plan.valid) { if (!best) best = plan; continue; }
+        plan.layout = candidate;
+        plan.extensionWalk = Math.round(extensionWalk(input, plan) * 10) / 10;
+        if (!best || !best.valid || plan.extensionWalk < best.extensionWalk - 0.2) best = plan;
+    }
+    return best;
 }
 module.exports = {compose: compose};

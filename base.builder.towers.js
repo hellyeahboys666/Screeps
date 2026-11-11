@@ -10,12 +10,11 @@ function damage(r) { return r <= 5 ? 600 : r >= 20 ? 150 : 600 - (r - 5) * 30; }
 
 // Hostile-reachable tiles: flood from open exits, blocked by terrain walls,
 // sources/minerals/controller, our ramparts/constructed walls and the cut.
-function outside(input, cutKeys) {
+function outside(input, cutKeys, barrierKeys) {
     const blocked = new Uint8Array(2500);
     for (const o of input.sources.concat(input.minerals || [], [input.controller])) blocked[o.pos.y * 50 + o.pos.x] = 1;
-    for (const o of input.structures) {
-        if (o.type === 'constructedWall' || (o.type === 'rampart' && o.my)) blocked[o.pos.y * 50 + o.pos.x] = 1;
-    }
+    // Only the barriers the perimeter planner credited (near the base) count.
+    for (const i of barrierKeys || []) blocked[i] = 1;
     for (const i of cutKeys) blocked[i] = 1;
     const seen = new Uint8Array(2500), queue = new Int32Array(2500);
     let h = 0, t = 0;
@@ -60,7 +59,7 @@ function placeTowers(input, entries, cutKeys, options) {
         occupied[o.pos.y * 50 + o.pos.x] = 1;
     }
     for (const i of cutKeys) occupied[i] = 1;
-    const out = outside(input, cutKeys), exitBand = access.nearExit(input);
+    const out = outside(input, cutKeys, options.barrierKeys), exitBand = access.nearExit(input);
     const hub = access.hubOf(input, rest);
     const walk = hub ? access.walkDistance(input, access.obstacles(input, rest), hub) : null;
     // Candidates: free tiles at least 4 from any hostile-reachable tile (a tower
@@ -68,7 +67,8 @@ function placeTowers(input, entries, cutKeys, options) {
     const candidates = [];
     for (let y = 2; y <= 47; y++) for (let x = 2; x <= 47; x++) {
         const i = y * 50 + x;
-        if (input.terrain[i] || occupied[i] || exitBand[i] || (walk && walk[i] > 15)) continue;
+        if (input.terrain[i] || occupied[i] || exitBand[i] || (walk && walk[i] > 15)
+            || (options.isLane && options.isLane(x, y))) continue;
         let safe = true;
         for (let ny = Math.max(0, y - 3); safe && ny <= Math.min(49, y + 3); ny++)
             for (let nx = Math.max(0, x - 3); nx <= Math.min(49, x + 3); nx++) if (out[ny * 50 + nx]) { safe = false; break; }
@@ -83,7 +83,25 @@ function placeTowers(input, entries, cutKeys, options) {
         for (let c = 0; c < C; c++) table[c * R + r] = damage(range(candidates[c], ramparts[r]));
     }
     const guard = access.create(input);
-    const accessible = chosen => !guard.check(rest.concat(chosen.map(c => ({type: 'tower', pos: candidates[c]}))));
+    // Moving towers must not lengthen the fillers' walk to the extensions (e.g. by
+    // blocking a tile next to the storage): allow at most +0.5 steps on average.
+    const extensions = rest.filter(e => e.type === 'extension');
+    const walkMean = towersAt => {
+        if (!hub || !extensions.length) return 0;
+        const dist = access.walkDistance(input, access.obstacles(input, rest.concat(towersAt)), hub);
+        let total = 0;
+        for (const e of extensions) {
+            let best = 65535;
+            for (const d of STEPS) { const i = e.pos.y * 50 + e.pos.x + d; if (i >= 0 && i < 2500 && dist[i] < best) best = dist[i]; }
+            total += best;
+        }
+        return total / extensions.length;
+    };
+    const walkLimit = walkMean(planned) + 0.5;
+    const accessible = chosen => {
+        const placedTowers = chosen.map(c => ({type: 'tower', pos: candidates[c]}));
+        return !guard.check(rest.concat(placedTowers)) && walkMean(placedTowers) <= walkLimit;
+    };
     const score = chosen => {
         let min = Infinity, sum = 0;
         for (let r = 0; r < R; r++) {

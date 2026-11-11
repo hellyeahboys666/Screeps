@@ -74,7 +74,8 @@ function accessBlocker(input, passable) {
 // Configurations are tried from strongest to weakest; the first whose cut fits
 // the tile budget wins.
 // ---------------------------------------------------------------------------
-const TILE_COST = 10, BUILT_TILE_COST = 14, BIG = 1 << 28, DISTANCE_WEIGHT = 1;
+const TILE_COST = 10, BUILT_TILE_COST = 40, BIG = 1 << 28, DISTANCE_WEIGHT = 12,
+    EXTENSION_BUFFER = -1, CREDIT_DEPTH = 6;
 const UNPROTECTED = new Set(['road', 'container', 'rampart', 'constructedWall', 'extractor']);
 const STEPS = [-51, -50, -49, -1, 1, 49, 50, 51];
 
@@ -145,7 +146,6 @@ function maxFlowCut(open, core, cost, budget) {
         for (let v = 0; v < N; v++) iter[v] = first[v];
         flow += augment();
         if (flow >= BIG) return {reason: 'uncuttable'};
-        if (flow > budget * (BUILT_TILE_COST + 50)) return {reason: 'overBudget'};
     }
     // Source side of the residual graph; cut = tiles whose in-node is reached but out-node is not.
     const seen = new Uint8Array(N);
@@ -185,14 +185,16 @@ function provesSealed(open, core, cut) {
 function planPerimeter(input, layout, options) {
     const budget = options.maxCutTiles === undefined ? 60 : options.maxCutTiles;
     if (!Number.isInteger(budget) || budget < 1 || budget > 150) return {reason: 'perimeterUnsupported:invalidCutBudget'};
-    const open = new Uint8Array(CELLS), built = new Uint8Array(CELLS);
-    for (let i = 0; i < CELLS; i++) open[i] = input.terrain[i] ? 0 : 1;
-    for (const o of input.sources.concat(input.minerals, [input.controller])) open[index(o.pos)] = 0;
+    const terrainOpen = new Uint8Array(CELLS), built = new Uint8Array(CELLS);
+    for (let i = 0; i < CELLS; i++) terrainOpen[i] = input.terrain[i] ? 0 : 1;
+    for (const o of input.sources.concat(input.minerals, [input.controller])) terrainOpen[index(o.pos)] = 0;
     const existing = input.structures.concat(input.spawns);
-    for (const o of existing) {
-        // Our ramparts and any constructed walls are the only structural barriers.
-        if (o.type === 'constructedWall' || (o.type === 'rampart' && o.my)) open[index(o.pos)] = 0;
-    }
+    // Our ramparts and constructed walls are the only structural barriers, and only
+    // those near the base are credited (creditDepth): a far wall line is defense in
+    // depth, but the line that matters is the one inside full tower range.
+    const barriers = existing.filter(o => o.type === 'constructedWall' || (o.type === 'rampart' && o.my))
+        .map(o => index(o.pos));
+    const creditDepth = Number.isInteger(options.creditDepth) ? options.creditDepth : CREDIT_DEPTH;
     const protect = existing.concat(input.sites, layout.map(o => Object.assign({my: true}, o)))
         .filter(o => o && o.my && !UNPROTECTED.has(o.type)
             // Source links live with their source; walling a source in is optional.
@@ -201,10 +203,9 @@ function planPerimeter(input, layout, options) {
         if (o && o.type !== 'road' && o.type !== 'rampart') built[index(o.pos)] = 1;
     }
     const weight = options.distanceWeight === undefined ? DISTANCE_WEIGHT : options.distanceWeight;
-    // Extensions are cheap to rebuild: by default they only need to be out of melee
-    // reach (buffer 1), not ranged reach, which keeps the wall much shorter.
-    // Key structures (spawn, storage, towers, labs, ...) keep the full buffer.
-    const extensionBuffer = Number.isInteger(options.extensionBuffer) ? options.extensionBuffer : 1;
+    // Default: extensions stay outside the wall (extensionBuffer -1, Hivemind style) so
+    // the ring hugs the key structures inside full tower range. 0..3 protects them too.
+    const extensionBuffer = Number.isInteger(options.extensionBuffer) ? options.extensionBuffer : EXTENSION_BUFFER;
     const configs = options.perimeterConfigs || [
         {buffer: 3, controller: true}, {buffer: 3, controller: false},
         {buffer: 2, controller: true}, {buffer: 2, controller: false}, {buffer: 1, controller: false}];
@@ -213,14 +214,15 @@ function planPerimeter(input, layout, options) {
         const core = new Uint8Array(CELLS);
         const mark = (c, r) => {
             for (let y = Math.max(0, c.y - r); y <= Math.min(49, c.y + r); y++)
-                for (let x = Math.max(0, c.x - r); x <= Math.min(49, c.x + r); x++) if (open[y * 50 + x]) core[y * 50 + x] = 1;
+                for (let x = Math.max(0, c.x - r); x <= Math.min(49, c.x + r); x++) if (terrainOpen[y * 50 + x]) core[y * 50 + x] = 1;
         };
-        for (const o of protect) mark(o.pos, o.type === 'extension' ? Math.min(config.buffer, extensionBuffer) : config.buffer);
+        for (const o of protect) {
+            if (o.type === 'extension' && extensionBuffer < 0) continue;
+            mark(o.pos, o.type === 'extension' ? Math.min(config.buffer, extensionBuffer) : config.buffer);
+        }
         mark(input.anchor.pos, config.buffer);
         if (config.controller) mark(input.controller.pos, 1);
-        // Cost grows with flood depth from the protected area: a slightly longer line
-        // hugging the base beats a short one across a distant choke point (weaker tower
-        // support, longer walks for defenders and repairers).
+        // Flood depth from the protected area over walkable terrain.
         const depth = new Uint16Array(CELLS).fill(65535), queue = new Int32Array(CELLS);
         let h = 0, t = 0;
         for (let i = 0; i < CELLS; i++) if (core[i]) { depth[i] = 0; queue[t++] = i; }
@@ -228,10 +230,14 @@ function planPerimeter(input, layout, options) {
             const i = queue[h++], x = i % SIZE;
             for (const d of STEPS) {
                 const n = i + d;
-                if (n < 0 || n >= CELLS || Math.abs(n % SIZE - x) > 1 || !open[n] || depth[n] !== 65535) continue;
+                if (n < 0 || n >= CELLS || Math.abs(n % SIZE - x) > 1 || !terrainOpen[n] || depth[n] !== 65535) continue;
                 depth[n] = depth[i] + 1; queue[t++] = n;
             }
         }
+        const open = terrainOpen.slice(), credited = [];
+        for (const i of barriers) if (!core[i] && depth[i] <= creditDepth) { open[i] = 0; credited.push(i); }
+        // Cost grows with depth: a line hugging the base (full tower damage, short walks
+        // for defenders/repairers) beats a shorter one across a distant choke point.
         const cost = new Int32Array(CELLS);
         for (let i = 0; i < CELLS; i++) {
             const p = pos(i);
@@ -242,7 +248,7 @@ function planPerimeter(input, layout, options) {
         if (result.reason) { lastReason = 'perimeterUnsupported:' + result.reason + ':b' + config.buffer; continue; }
         if (result.cut.length > budget) { lastReason = 'perimeterUnsupported:overBudget:b' + config.buffer; continue; }
         if (!provesSealed(open, core, result.cut)) { lastReason = 'perimeterUnsupported:cutProofFailed'; continue; }
-        return {cut: result.cut, config};
+        return {cut: result.cut, config, credited};
     }
     return {reason: lastReason};
 }
@@ -297,11 +303,21 @@ function planDefense(input, layout = [], options = {}) {
     const perimeter = planPerimeter(input, layout, options);
     if (perimeter.reason) { result.blockers.push(perimeter.reason); return result; }
     for (const i of perimeter.cut) {
-        if (placed.has(i) || ramparts.has(i)) continue;
+        if (ramparts.has(i)) continue;
+        if (placed.has(i)) {
+            // The wall crosses a structure's shield rampart (e.g. a source link not built
+            // until RCL5-6): it becomes a wall rampart and no longer waits for the structure,
+            // otherwise the wall would have a hole until then.
+            const overlay = result.entries.find(e => e.purpose === 'vitalOverlay' && index(e.pos) === i);
+            if (overlay) { overlay.purpose = 'perimeter'; delete overlay.requiresType; }
+            continue;
+        }
         result.entries.push({type: 'rampart', purpose: 'perimeter', pos: pos(i), priority: 90});
     }
     result.perimeterSupported = true;
     result.perimeter = {tiles: perimeter.cut.length, buffer: perimeter.config.buffer, controller: perimeter.config.controller};
+    result.barrierKeys = perimeter.credited;
+    result.perimeter.credited = perimeter.credited.length;
     return result;
 }
 module.exports = {planDefense, planPerimeter};

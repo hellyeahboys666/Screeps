@@ -56,6 +56,13 @@ function nearExit(input) {
     }
     return mask;
 }
+// Extension 'grid' layout: diagonal road lanes every 4 tiles in both directions,
+// crossing at the storage. Other base structures avoid these tiles when they can.
+function laneOf(hub, layout) {
+    if (!hub || layout === 'checker') return function() { return false; };
+    const a = (hub.x + hub.y) & 3, b = ((hub.x - hub.y) % 4 + 4) % 4;
+    return function(x, y) { return ((x + y) & 3) === a || (((x - y) % 4 + 4) % 4) === b; };
+}
 function hubOf(input, entries) {
     const bank = input.structures.concat(input.sites, entries || []).find(o => o && o.type === 'storage');
     return bank ? bank.pos : null;
@@ -161,4 +168,4 @@ function create(input) {
     }
     return {check};
 }
-module.exports = {create, obstacles, flood, seat, passable, hubOf, walkDistance, nearExit};
+module.exports = {create, obstacles, flood, seat, passable, hubOf, walkDistance, nearExit, laneOf};

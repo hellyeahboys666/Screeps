@@ -27,7 +27,7 @@ DEPLOY = pathlib.Path(
     '/Users/liaowang/Library/Application Support/Screeps/scripts/screeps.com/deploy_screeps.py'
 )
 OUTPUT = pathlib.Path(__file__).resolve().parent / 'fixtures' / 'base-builder'
-ROOMS = ('E9S18', 'E9S19', 'E7S18')
+ROOMS = ('E9S18', 'E9S19', 'E7S18', 'E4S18')
 SHARD = 'shard3'
 LAYOUT_TYPES = frozenset({
     'controller', 'source', 'mineral', 'constructionSite', 'spawn', 'extension',

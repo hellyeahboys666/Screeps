@@ -1,0 +1,2355 @@
+{
+  "capturedAt": "2026-11-11T13:06:08Z",
+  "livePlan": {
+    "anchorId": "6af40025944b00b6df04f08b",
+    "anchorPos": {
+      "x": 27,
+      "y": 22
+    },
+    "blockers": [],
+    "entries": [
+      {
+        "pos": {
+          "x": 31,
+          "y": 17
+        },
+        "priority": 1,
+        "purpose": "vitalOverlay",
+        "requiresType": "spawn",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 27,
+          "y": 19
+        },
+        "priority": 1,
+        "purpose": "vitalOverlay",
+        "requiresType": "spawn",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 27,
+          "y": 22
+        },
+        "priority": 1,
+        "purpose": "vitalOverlay",
+        "requiresType": "spawn",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 20
+        },
+        "priority": 2,
+        "purpose": "vitalOverlay",
+        "requiresType": "storage",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 17
+        },
+        "priority": 3,
+        "purpose": "vitalOverlay",
+        "requiresType": "tower",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 19
+        },
+        "priority": 3,
+        "purpose": "vitalOverlay",
+        "requiresType": "tower",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 32,
+          "y": 19
+        },
+        "priority": 3,
+        "purpose": "vitalOverlay",
+        "requiresType": "tower",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 27,
+          "y": 21
+        },
+        "priority": 3,
+        "purpose": "vitalOverlay",
+        "requiresType": "tower",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 24
+        },
+        "priority": 3,
+        "purpose": "vitalOverlay",
+        "requiresType": "tower",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 32,
+          "y": 26
+        },
+        "priority": 3,
+        "purpose": "vitalOverlay",
+        "requiresType": "tower",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 20
+        },
+        "priority": 4,
+        "purpose": "vitalOverlay",
+        "requiresType": "terminal",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 23,
+          "y": 8
+        },
+        "priority": 5,
+        "purpose": "vitalOverlay",
+        "requiresType": "link",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 26,
+          "y": 21
+        },
+        "priority": 5,
+        "purpose": "vitalOverlay",
+        "requiresType": "link",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 22
+        },
+        "priority": 5,
+        "purpose": "vitalOverlay",
+        "requiresType": "link",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 34,
+          "y": 25
+        },
+        "priority": 5,
+        "purpose": "vitalOverlay",
+        "requiresType": "link",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 26,
+          "y": 20
+        },
+        "priority": 6,
+        "purpose": "vitalOverlay",
+        "requiresType": "powerSpawn",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 25,
+          "y": 20
+        },
+        "priority": 7,
+        "purpose": "vitalOverlay",
+        "requiresType": "lab",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 23,
+          "y": 21
+        },
+        "priority": 7,
+        "purpose": "vitalOverlay",
+        "requiresType": "lab",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 26,
+          "y": 22
+        },
+        "priority": 7,
+        "purpose": "vitalOverlay",
+        "requiresType": "lab",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 27,
+          "y": 23
+        },
+        "priority": 9,
+        "purpose": "vitalOverlay",
+        "requiresType": "nuker",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 24,
+          "y": 7
+        },
+        "priority": 10,
+        "purpose": "source:5bbcad2c9099fc012e636c15",
+        "type": "container"
+      },
+      {
+        "pos": {
+          "x": 35,
+          "y": 24
+        },
+        "priority": 10,
+        "purpose": "source:5bbcad2c9099fc012e636c17",
+        "type": "container"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 21
+        },
+        "priority": 20,
+        "purpose": "controllerBuffer",
+        "type": "container"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 17
+        },
+        "priority": 30,
+        "purpose": "coreTower",
+        "type": "tower"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 20
+        },
+        "priority": 40,
+        "purpose": "coreStorage",
+        "type": "storage"
+      },
+      {
+        "pos": {
+          "x": 23,
+          "y": 8
+        },
+        "priority": 50,
+        "purpose": "sourceLink:5bbcad2c9099fc012e636c15",
+        "type": "link"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 11
+        },
+        "priority": 50,
+        "purpose": "extension:59",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 12
+        },
+        "priority": 50,
+        "purpose": "extension:40",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 31,
+          "y": 12
+        },
+        "priority": 50,
+        "purpose": "extension:41",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 33,
+          "y": 12
+        },
+        "priority": 50,
+        "purpose": "extension:42",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 35,
+          "y": 12
+        },
+        "priority": 50,
+        "purpose": "extension:43",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 13
+        },
+        "priority": 50,
+        "purpose": "extension:27",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 30,
+          "y": 13
+        },
+        "priority": 50,
+        "purpose": "extension:28",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 32,
+          "y": 13
+        },
+        "priority": 50,
+        "purpose": "extension:29",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 34,
+          "y": 13
+        },
+        "priority": 50,
+        "purpose": "extension:30",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 27,
+          "y": 14
+        },
+        "priority": 50,
+        "purpose": "extension:15",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 14
+        },
+        "priority": 50,
+        "purpose": "extension:16",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 31,
+          "y": 14
+        },
+        "priority": 50,
+        "purpose": "extension:17",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 33,
+          "y": 14
+        },
+        "priority": 50,
+        "purpose": "extension:18",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 35,
+          "y": 14
+        },
+        "priority": 50,
+        "purpose": "extension:44",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 26,
+          "y": 15
+        },
+        "priority": 50,
+        "purpose": "extension:10",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 15
+        },
+        "priority": 50,
+        "purpose": "extension:6",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 30,
+          "y": 15
+        },
+        "priority": 50,
+        "purpose": "extension:7",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 32,
+          "y": 15
+        },
+        "priority": 50,
+        "purpose": "extension:8",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 34,
+          "y": 15
+        },
+        "priority": 50,
+        "purpose": "extension:31",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 36,
+          "y": 15
+        },
+        "priority": 50,
+        "purpose": "extension:45",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 27,
+          "y": 16
+        },
+        "priority": 50,
+        "purpose": "extension:3",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 16
+        },
+        "priority": 50,
+        "purpose": "extension:1",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 31,
+          "y": 16
+        },
+        "priority": 50,
+        "purpose": "extension:2",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 33,
+          "y": 16
+        },
+        "priority": 50,
+        "purpose": "extension:19",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 35,
+          "y": 16
+        },
+        "priority": 50,
+        "purpose": "extension:32",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 26,
+          "y": 17
+        },
+        "priority": 50,
+        "purpose": "extension:4",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 17
+        },
+        "priority": 50,
+        "purpose": "extension:0",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 34,
+          "y": 17
+        },
+        "priority": 50,
+        "purpose": "extension:20",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 36,
+          "y": 17
+        },
+        "priority": 50,
+        "purpose": "extension:46",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 35,
+          "y": 18
+        },
+        "priority": 50,
+        "purpose": "extension:33",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 36,
+          "y": 19
+        },
+        "priority": 50,
+        "purpose": "extension:47",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 35,
+          "y": 20
+        },
+        "priority": 50,
+        "purpose": "extension:34",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 36,
+          "y": 21
+        },
+        "priority": 50,
+        "purpose": "extension:48",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 23,
+          "y": 22
+        },
+        "priority": 50,
+        "purpose": "extension:50",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 37,
+          "y": 22
+        },
+        "priority": 50,
+        "purpose": "extension:56",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 36,
+          "y": 23
+        },
+        "priority": 50,
+        "purpose": "extension:52",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 23,
+          "y": 24
+        },
+        "priority": 50,
+        "purpose": "extension:53",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 25,
+          "y": 24
+        },
+        "priority": 50,
+        "purpose": "extension:21",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 26,
+          "y": 25
+        },
+        "priority": 50,
+        "purpose": "extension:13",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 25
+        },
+        "priority": 50,
+        "purpose": "extension:9",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 30,
+          "y": 25
+        },
+        "priority": 50,
+        "purpose": "extension:5",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 34,
+          "y": 25
+        },
+        "priority": 50,
+        "purpose": "sourceLink:5bbcad2c9099fc012e636c17",
+        "type": "link"
+      },
+      {
+        "pos": {
+          "x": 27,
+          "y": 26
+        },
+        "priority": 50,
+        "purpose": "extension:14",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 26
+        },
+        "priority": 50,
+        "purpose": "extension:11",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 31,
+          "y": 26
+        },
+        "priority": 50,
+        "purpose": "extension:12",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 33,
+          "y": 26
+        },
+        "priority": 50,
+        "purpose": "extension:22",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 35,
+          "y": 26
+        },
+        "priority": 50,
+        "purpose": "extension:51",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 26,
+          "y": 27
+        },
+        "priority": 50,
+        "purpose": "extension:26",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 27
+        },
+        "priority": 50,
+        "purpose": "extension:23",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 30,
+          "y": 27
+        },
+        "priority": 50,
+        "purpose": "extension:24",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 32,
+          "y": 27
+        },
+        "priority": 50,
+        "purpose": "extension:25",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 34,
+          "y": 27
+        },
+        "priority": 50,
+        "purpose": "extension:35",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 25,
+          "y": 28
+        },
+        "priority": 50,
+        "purpose": "extension:49",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 27,
+          "y": 28
+        },
+        "priority": 50,
+        "purpose": "extension:37",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 28
+        },
+        "priority": 50,
+        "purpose": "extension:36",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 31,
+          "y": 28
+        },
+        "priority": 50,
+        "purpose": "extension:38",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 33,
+          "y": 28
+        },
+        "priority": 50,
+        "purpose": "extension:39",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 35,
+          "y": 28
+        },
+        "priority": 50,
+        "purpose": "extension:54",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 26,
+          "y": 29
+        },
+        "priority": 50,
+        "purpose": "extension:57",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 29
+        },
+        "priority": 50,
+        "purpose": "extension:55",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 34,
+          "y": 29
+        },
+        "priority": 50,
+        "purpose": "extension:58",
+        "type": "extension"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 22
+        },
+        "priority": 55,
+        "purpose": "controllerLink",
+        "type": "link"
+      },
+      {
+        "pos": {
+          "x": 26,
+          "y": 21
+        },
+        "priority": 60,
+        "purpose": "baseLink",
+        "type": "link"
+      },
+      {
+        "pos": {
+          "x": 30,
+          "y": 28
+        },
+        "priority": 65,
+        "purpose": "mineralContainer:5bbcb2f640062e4259e93f55",
+        "type": "container"
+      },
+      {
+        "pos": {
+          "x": 21,
+          "y": 4
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 20,
+          "y": 5
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 22,
+          "y": 5
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 19,
+          "y": 6
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 23,
+          "y": 6
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 24,
+          "y": 6
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 18,
+          "y": 7
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 17,
+          "y": 8
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 15,
+          "y": 9
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 16,
+          "y": 9
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 14,
+          "y": 10
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 13,
+          "y": 11
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 12,
+          "y": 12
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 11,
+          "y": 13
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 10,
+          "y": 14
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 9,
+          "y": 15
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 8,
+          "y": 16
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 7,
+          "y": 17
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 30,
+          "y": 17
+        },
+        "priority": 70,
+        "purpose": "path:expansion:spawn:3",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 6,
+          "y": 18
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 18,
+          "y": 18
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 19,
+          "y": 18
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 20,
+          "y": 18
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 21,
+          "y": 18
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 18
+        },
+        "priority": 70,
+        "purpose": "path:expansion:spawn:3",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 5,
+          "y": 19
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 16,
+          "y": 19
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 17,
+          "y": 19
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 22,
+          "y": 19
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 19
+        },
+        "priority": 70,
+        "purpose": "path:expansion:spawn:3",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 4,
+          "y": 20
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 11,
+          "y": 20
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 12,
+          "y": 20
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 13,
+          "y": 20
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 14,
+          "y": 20
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 15,
+          "y": 20
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 23,
+          "y": 20
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 27,
+          "y": 20
+        },
+        "priority": 70,
+        "purpose": "path:expansion:spawn:2",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 3,
+          "y": 21
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 10,
+          "y": 21
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 24,
+          "y": 21
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 2,
+          "y": 22
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 9,
+          "y": 22
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 25,
+          "y": 22
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 2,
+          "y": 23
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 8,
+          "y": 23
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 26,
+          "y": 23
+        },
+        "priority": 70,
+        "purpose": "path:spawn:6af40025944b00b6df04f08b",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 23
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c17",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 23
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c17",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 3,
+          "y": 24
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 6,
+          "y": 24
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 7,
+          "y": 24
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 30,
+          "y": 24
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c17",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 4,
+          "y": 25
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 5,
+          "y": 25
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c15",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 31,
+          "y": 25
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c17",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 32,
+          "y": 25
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c17",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 33,
+          "y": 25
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c17",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 35,
+          "y": 25
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c17",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 30,
+          "y": 26
+        },
+        "priority": 70,
+        "purpose": "path:mineralContainer:5bbcb2f640062e4259e93f55",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 34,
+          "y": 26
+        },
+        "priority": 70,
+        "purpose": "path:source:5bbcad2c9099fc012e636c17",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 27
+        },
+        "priority": 70,
+        "purpose": "path:mineralContainer:5bbcb2f640062e4259e93f55",
+        "type": "road"
+      },
+      {
+        "pos": {
+          "x": 31,
+          "y": 29
+        },
+        "priority": 70,
+        "purpose": "mineralExtractor:5bbcb2f640062e4259e93f55",
+        "type": "extractor"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 20
+        },
+        "priority": 75,
+        "purpose": "coreTerminal",
+        "type": "terminal"
+      },
+      {
+        "pos": {
+          "x": 29,
+          "y": 19
+        },
+        "priority": 78,
+        "purpose": "expansion:tower:5",
+        "type": "tower"
+      },
+      {
+        "pos": {
+          "x": 32,
+          "y": 19
+        },
+        "priority": 78,
+        "purpose": "expansion:tower:2",
+        "type": "tower"
+      },
+      {
+        "pos": {
+          "x": 27,
+          "y": 21
+        },
+        "priority": 78,
+        "purpose": "expansion:tower:4",
+        "type": "tower"
+      },
+      {
+        "pos": {
+          "x": 28,
+          "y": 24
+        },
+        "priority": 78,
+        "purpose": "expansion:tower:3",
+        "type": "tower"
+      },
+      {
+        "pos": {
+          "x": 32,
+          "y": 26
+        },
+        "priority": 78,
+        "purpose": "expansion:tower:6",
+        "type": "tower"
+      },
+      {
+        "pos": {
+          "x": 31,
+          "y": 17
+        },
+        "priority": 82,
+        "purpose": "expansion:spawn:3",
+        "type": "spawn"
+      },
+      {
+        "pos": {
+          "x": 27,
+          "y": 19
+        },
+        "priority": 82,
+        "purpose": "expansion:spawn:2",
+        "type": "spawn"
+      },
+      {
+        "pos": {
+          "x": 23,
+          "y": 21
+        },
+        "priority": 85,
+        "purpose": "labInput",
+        "type": "lab"
+      },
+      {
+        "pos": {
+          "x": 26,
+          "y": 22
+        },
+        "priority": 85,
+        "purpose": "labInput",
+        "type": "lab"
+      },
+      {
+        "pos": {
+          "x": 37,
+          "y": 11
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 37,
+          "y": 12
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 37,
+          "y": 13
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 38,
+          "y": 13
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 38,
+          "y": 14
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 38,
+          "y": 15
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 38,
+          "y": 16
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 38,
+          "y": 17
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 19,
+          "y": 18
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 38,
+          "y": 18
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 19,
+          "y": 19
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 38,
+          "y": 19
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 19,
+          "y": 20
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 25,
+          "y": 20
+        },
+        "priority": 90,
+        "purpose": "labOutput",
+        "type": "lab"
+      },
+      {
+        "pos": {
+          "x": 38,
+          "y": 20
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 39,
+          "y": 20
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 19,
+          "y": 21
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 39,
+          "y": 21
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 19,
+          "y": 22
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 39,
+          "y": 22
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 19,
+          "y": 23
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 39,
+          "y": 23
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 19,
+          "y": 24
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 38,
+          "y": 24
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 39,
+          "y": 24
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 19,
+          "y": 25
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 20,
+          "y": 25
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 21,
+          "y": 25
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 37,
+          "y": 25
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 38,
+          "y": 25
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 37,
+          "y": 26
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 37,
+          "y": 27
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 37,
+          "y": 28
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 37,
+          "y": 29
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 23,
+          "y": 30
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 24,
+          "y": 30
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 36,
+          "y": 30
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 37,
+          "y": 30
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 24,
+          "y": 31
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 25,
+          "y": 31
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 33,
+          "y": 31
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 34,
+          "y": 31
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 35,
+          "y": 31
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 36,
+          "y": 31
+        },
+        "priority": 90,
+        "purpose": "perimeter",
+        "type": "rampart"
+      },
+      {
+        "pos": {
+          "x": 26,
+          "y": 20
+        },
+        "priority": 130,
+        "purpose": "expansion:powerSpawn:1",
+        "type": "powerSpawn"
+      },
+      {
+        "pos": {
+          "x": 26,
+          "y": 19
+        },
+        "priority": 140,
+        "purpose": "expansion:observer:1",
+        "type": "observer"
+      },
+      {
+        "pos": {
+          "x": 27,
+          "y": 23
+        },
+        "priority": 150,
+        "purpose": "expansion:nuker:1",
+        "type": "nuker"
+      }
+    ],
+    "limits": {
+      "extension": 60,
+      "factory": 0,
+      "lab": 3,
+      "nuker": 1,
+      "observer": 1,
+      "powerSpawn": 1,
+      "spawn": 3,
+      "tower": 6
+    },
+    "perimeter": {
+      "buffer": 3,
+      "controller": true,
+      "minDamage": 2610,
+      "minDamageBefore": 2310,
+      "tiles": 43,
+      "towersMoved": 6
+    },
+    "perimeterBudget": 60,
+    "perimeterPlanned": true,
+    "perimeterSupported": true,
+    "valid": true,
+    "warnings": []
+  },
+  "objects": [
+    {
+      "_id": "5bbcad2c9099fc012e636c15",
+      "type": "source",
+      "x": 25,
+      "y": 7
+    },
+    {
+      "_id": "5bbcad2c9099fc012e636c16",
+      "level": 2,
+      "type": "controller",
+      "user": "64b81fa75af779ad31473ef7",
+      "x": 31,
+      "y": 21
+    },
+    {
+      "_id": "5bbcad2c9099fc012e636c17",
+      "type": "source",
+      "x": 34,
+      "y": 23
+    },
+    {
+      "_id": "5bbcb2f640062e4259e93f55",
+      "type": "mineral",
+      "x": 31,
+      "y": 29
+    },
+    {
+      "_id": "6af40025944b00b6df04f08b",
+      "name": "BB-E4S18-27-22",
+      "type": "spawn",
+      "user": "64b81fa75af779ad31473ef7",
+      "x": 27,
+      "y": 22
+    },
+    {
+      "_id": "6af403ec5014234c6c49a510",
+      "type": "container",
+      "x": 35,
+      "y": 24
+    },
+    {
+      "_id": "6af41de3ff4a9414715d47dd",
+      "type": "extension",
+      "user": "64b81fa75af779ad31473ef7",
+      "x": 29,
+      "y": 16
+    },
+    {
+      "_id": "6af41f8218b9977919d8f01f",
+      "type": "extension",
+      "user": "64b81fa75af779ad31473ef7",
+      "x": 28,
+      "y": 17
+    },
+    {
+      "_id": "6af420f02db62160503ad209",
+      "type": "extension",
+      "user": "64b81fa75af779ad31473ef7",
+      "x": 31,
+      "y": 26
+    },
+    {
+      "_id": "6af4241ea616791b1539d529",
+      "type": "extension",
+      "user": "64b81fa75af779ad31473ef7",
+      "x": 29,
+      "y": 26
+    },
+    {
+      "_id": "6af424b9ce151be26c5c8f77",
+      "type": "extension",
+      "user": "64b81fa75af779ad31473ef7",
+      "x": 26,
+      "y": 15
+    },
+    {
+      "_id": "6af42a3ccf5c9e8a1d1126bf",
+      "type": "container",
+      "x": 24,
+      "y": 7
+    },
+    {
+      "_id": "6af42babed0b7f403eb5f7c8",
+      "type": "road",
+      "x": 30,
+      "y": 17
+    },
+    {
+      "_id": "6af42bc0d0fe35b4c3146820",
+      "type": "road",
+      "x": 29,
+      "y": 18
+    },
+    {
+      "_id": "6af42bd6bec0712d4b798a99",
+      "type": "road",
+      "x": 28,
+      "y": 19
+    },
+    {
+      "_id": "6af42c20a1e5c183a53a50ba",
+      "type": "road",
+      "x": 30,
+      "y": 26
+    },
+    {
+      "_id": "6af42c56bbf954cc5c9b4d58",
+      "type": "road",
+      "x": 29,
+      "y": 27
+    },
+    {
+      "_id": "6af42d28cb34460635f79e29",
+      "type": "road",
+      "x": 27,
+      "y": 20
+    },
+    {
+      "_id": "6af42eb33d688f1cd093f25f",
+      "type": "road",
+      "x": 22,
+      "y": 5
+    },
+    {
+      "_id": "6af42eec05ec9111ff5bd0da",
+      "type": "road",
+      "x": 23,
+      "y": 6
+    },
+    {
+      "_id": "6af42ef4cd378769ccb4b69f",
+      "type": "road",
+      "x": 21,
+      "y": 4
+    },
+    {
+      "_id": "6af42f180590454744e14c7e",
+      "type": "road",
+      "x": 24,
+      "y": 6
+    },
+    {
+      "_id": "6af42f4305ec919f025bd0f1",
+      "type": "road",
+      "x": 20,
+      "y": 5
+    },
+    {
+      "_id": "6af42f473d688f6bce93f28a",
+      "structureType": "road",
+      "type": "constructionSite",
+      "user": "64b81fa75af779ad31473ef7",
+      "x": 15,
+      "y": 9
+    },
+    {
+      "_id": "6af42f4c9629cc5d965375a2",
+      "type": "road",
+      "x": 19,
+      "y": 6
+    },
+    {
+      "_id": "6af42f7c2da1ee59beb2e217",
+      "type": "road",
+      "x": 18,
+      "y": 7
+    },
+    {
+      "_id": "6af42f92f688e52f448c30d2",
+      "type": "road",
+      "x": 17,
+      "y": 8
+    },
+    {
+      "_id": "6af43086280acc7136f7f2b7",
+      "type": "road",
+      "x": 13,
+      "y": 11
+    },
+    {
+      "_id": "6af432120e5b38ef51626df3",
+      "type": "road",
+      "x": 12,
+      "y": 12
+    },
+    {
+      "_id": "6af432806aa62b54c1d79df7",
+      "type": "road",
+      "x": 11,
+      "y": 13
+    },
+    {
+      "_id": "6af43285734d35ce10a55ce1",
+      "type": "road",
+      "x": 14,
+      "y": 10
+    },
+    {
+      "_id": "6af434692f233149b9467b7e",
+      "type": "road",
+      "x": 16,
+      "y": 9
+    },
+    {
+      "_id": "6af441c390c9177392e471e8",
+      "type": "road",
+      "x": 8,
+      "y": 16
+    },
+    {
+      "_id": "6af443d7bbfddecc22018d1b",
+      "type": "road",
+      "x": 7,
+      "y": 17
+    },
+    {
+      "_id": "6af4447e18d6ecdedb4761fe",
+      "type": "road",
+      "x": 6,
+      "y": 18
+    },
+    {
+      "_id": "6af445af951900cfc06d04e0",
+      "type": "road",
+      "x": 18,
+      "y": 18
+    },
+    {
+      "_id": "6af4479f0dcd1bdcee45a1bd",
+      "type": "road",
+      "x": 19,
+      "y": 18
+    },
+    {
+      "_id": "6af4484b38c81d6a0594f421",
+      "type": "road",
+      "x": 9,
+      "y": 15
+    },
+    {
+      "_id": "6af44b0a2f2bbf8c156f9e0f",
+      "type": "road",
+      "x": 21,
+      "y": 18
+    },
+    {
+      "_id": "6af44c82ecadfd4477d0a342",
+      "type": "road",
+      "x": 20,
+      "y": 18
+    },
+    {
+      "_id": "6af44f0acf5c9ec7a9112f25",
+      "type": "road",
+      "x": 16,
+      "y": 19
+    },
+    {
+      "_id": "6af44f865014230ff249b733",
+      "type": "road",
+      "x": 5,
+      "y": 19
+    },
+    {
+      "_id": "6af44fb597ba0379280f3281",
+      "type": "road",
+      "x": 17,
+      "y": 19
+    },
+    {
+      "_id": "6af45091a593b428bcd8b17b",
+      "type": "road",
+      "x": 22,
+      "y": 19
+    },
+    {
+      "_id": "6af4512b42b6e7318c2ac626",
+      "type": "road",
+      "x": 11,
+      "y": 20
+    },
+    {
+      "_id": "6af4519e88dbc60903d12195",
+      "type": "road",
+      "x": 4,
+      "y": 20
+    },
+    {
+      "_id": "6af451d32f2331ebe746826c",
+      "type": "road",
+      "x": 10,
+      "y": 14
+    },
+    {
+      "_id": "6af4531b18b99707bad8fc22",
+      "type": "road",
+      "x": 14,
+      "y": 20
+    },
+    {
+      "_id": "6af4535407ebc168d4eb3633",
+      "type": "road",
+      "x": 13,
+      "y": 20
+    },
+    {
+      "_id": "6af45366bbfdde11450190d7",
+      "type": "road",
+      "x": 15,
+      "y": 20
+    },
+    {
+      "_id": "6af4536aed0b7fbe99b60089",
+      "structureType": "road",
+      "type": "constructionSite",
+      "user": "64b81fa75af779ad31473ef7",
+      "x": 3,
+      "y": 21
+    },
+    {
+      "_id": "6af454ae633790596dda4d93",
+      "type": "road",
+      "x": 23,
+      "y": 20
+    },
+    {
+      "_id": "6af45500633790e8c7da4da4",
+      "type": "road",
+      "x": 12,
+      "y": 20
+    },
+    {
+      "_id": "6af4570ffa149808b4f9a096",
+      "type": "road",
+      "x": 24,
+      "y": 21
+    },
+    {
+      "_id": "6af45ac5a266560d6a75b79a",
+      "type": "road",
+      "x": 10,
+      "y": 21
+    },
+    {
+      "_id": "6af45b1d974abc43a274bdbb",
+      "type": "road",
+      "x": 2,
+      "y": 22
+    },
+    {
+      "_id": "6af45cf7cd4f4be3ee0c7e7b",
+      "type": "container",
+      "x": 28,
+      "y": 21
+    },
+    {
+      "_id": "6af45cfc6dad3383dc4c6206",
+      "structureType": "road",
+      "type": "constructionSite",
+      "user": "64b81fa75af779ad31473ef7",
+      "x": 2,
+      "y": 23
+    },
+    {
+      "_id": "6af45dacf60aa457cbd3d2ac",
+      "type": "road",
+      "x": 25,
+      "y": 22
+    },
+    {
+      "_id": "6af45e03fa14981609f9a24e",
+      "type": "road",
+      "x": 9,
+      "y": 22
+    },
+    {
+      "_id": "6af45f1b488c865a95d5654e",
+      "type": "road",
+      "x": 8,
+      "y": 23
+    },
+    {
+      "_id": "6af45f20ecadfd0e8dd0a796",
+      "structureType": "road",
+      "type": "constructionSite",
+      "user": "64b81fa75af779ad31473ef7",
+      "x": 6,
+      "y": 24
+    },
+    {
+      "_id": "6af45f54cd4f4b6a850c7f02",
+      "type": "road",
+      "x": 3,
+      "y": 24
+    },
+    {
+      "_id": "6af45f586ef892ed5fdc63c9",
+      "structureType": "road",
+      "type": "constructionSite",
+      "user": "64b81fa75af779ad31473ef7",
+      "x": 7,
+      "y": 24
+    }
+  ],
+  "room": "E4S18",
+  "shard": "shard3",
+  "terrain": "1111100000000000111111000000000000111111111111111111100000000000000000000000000000001111112222111111112220000000000000000022200000000011111200222222111120200000000002000000222000000000111112000222222111222200110000020000000000001100022111110000000021100222011110001110000000002111100200111100000000010002220111100111110002200011111100001111000000000100000011110001111100222001111111100111100000020000000022111102001110002200111111111111112200000110000000000112220000000000001111100201111122000011110000000222222000000000000111110000001111222000111100000000022200000000000011111100000001100000001111000000000000000002220111111111000222020000000111100000000000000000002011111111100022222200000001111000000222000000000021111111110000222222000000001111000002220000000000011111111100000000200000000011110000002200000000001111111111022200000000000000011000000020001111111111111111110222000000002020000000000000000111111111110022111122000000000020000000000000000001110011112002200112220002222002200000000000002200111220000000022002022220011100002000000000000002111112222000000222022202201111100002000000020000011111100220000002220202020011111100020000000200000111110000000020002200020000111111000000000000000000112222000000000000000200000111100020000000000000022222220000000000021112000000002200000000000000000222222200000000000111110000000022200020000000000002202222020000000011111100000000222000220000000000020022202200022211111110002220022222000000000000000002222222200021111111000022111200002000222200000000002222222000011111100001111112000000000222000000000202222220000011000220111111100000022000000000000000000220000000000000001111000200022200001100000220000002200002000000022011100000002222000111100000000000000000000000000001110000000000200001111000000000222222000000000002111100000000000000221100000000002222220002000000011111000000000000002220020011000002222200020000000111100002000000000000000200111220022222022200000001110000000000000000000202001111120202020000000000011100202000000000000000020011111102022200000110000111102000000000110000002220111111100220000011110002111100000000001110000000001111110002202000111110220111001110000011112200000111110220000002001111102200001111110000111112200001111002000000022001110022000011111110002111100000111110000000000020000000220000111111100002110000001111110000000000000000002200000111111000000000000111111100000220000002000022200000111111000000000011111110000002000000000000022000000011111100111111111111100000000000000000000000000000111111111111111111",
+  "variant": "existing"
+}

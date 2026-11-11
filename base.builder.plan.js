@@ -34,7 +34,8 @@ function clearance(input, blocked) {
     return distance;
 }
 
-function plan(input, limits) {
+function plan(input, limits, options) {
+    options = options || {};
     var bad = {valid: false, reason: 'invalidSnapshot', entries: [], blockers: ['invalidSnapshot']};
     if (!input || !input.eligible || !valid(input.anchor && input.anchor.pos)
         || !valid(input.controller && input.controller.pos)
@@ -114,8 +115,9 @@ function plan(input, limits) {
         var tower = candidates(function(p) {
             return range(p, input.anchor.pos) <= 7 && !nearSource(p) && (!walk || walk[key(p)] <= 10);
         }, function(p, i) {
+            var onLane = access.laneOf(bank, options.layout);
             return (walk ? walk[i] * 6 + range(p, input.anchor.pos) * 4 : range(p, input.anchor.pos) * 10)
-                - Math.min(clear[i], 5) * 2;
+                - Math.min(clear[i], 5) * 2 + (onLane(p.x, p.y) ? 40 : 0);
         })
             .find(function(c) { return !guard.check(entries.concat({type: 'tower', pos: c.pos})); });
         if (tower) add('tower', 'coreTower', tower.pos, 30);

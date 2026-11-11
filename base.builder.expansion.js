@@ -17,7 +17,8 @@ function valid(p) {return !!p && Number.isInteger(p.x) && Number.isInteger(p.y)
 function idx(p) {return p.y*50+p.x;}
 function range(a,b) {return Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));}
 
-function planExpansion(input,seed,limits) {
+function planExpansion(input,seed,limits,options) {
+    options=options||{};
     const invalid={entries:[],blockers:['invalidExpansionInput']};
     if(!input||input.eligible!==true||!input.anchor||!valid(input.anchor.pos)
         ||!input.controller||!valid(input.controller.pos)
@@ -31,6 +32,7 @@ function planExpansion(input,seed,limits) {
     const guard=access.create(input);
     const entries=[],blockers=[];
     const storage=all.find(o=>o.type==='storage');
+    const onLane=access.laneOf(storage&&storage.pos,options.layout);
     if(guard.check(seed))return {entries:[],blockers:['initialAccessBlocked']};
     // Tiles never used for these structures, computed once: walls, source and
     // mineral seats, and the controller's upgrade area.
@@ -61,7 +63,7 @@ function planExpansion(input,seed,limits) {
                 if(spec.type==='spawn' && (d<3||fromStorage>10))continue;
                 const separation=prior.length?Math.min(...prior.map(q=>range(p,q))):6;
                 if(spec.type==='tower' && separation<3)continue;
-                let score=d*2+fromStorage*3;
+                let score=d*2+fromStorage*3+(onLane(x,y)?40:0);
                 // Mild spread only: central towers cover every exit and refill fast.
                 if(spec.type==='tower')score-=Math.min(separation,5)*3;
                 else if(spec.type==='spawn')score-=Math.min(separation,7)*3;

@@ -5,7 +5,7 @@ function valid(p) { return p && Number.isInteger(p.x) && Number.isInteger(p.y) &
 function idx(p) { return p.y * 50 + p.x; }
 function range(a, b) { return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)); }
 function interior(p) { return p.x >= 2 && p.x <= 47 && p.y >= 2 && p.y <= 47; }
-function plan(input, seed = {entries: []}, limits) {
+function plan(input, seed = {entries: []}, limits, options = {}) {
     const invalid = {valid: false, entries: [], blockers: ['invalidSnapshot']};
     if (!input || !input.eligible || !input.anchor || !valid(input.anchor.pos)
         || !input.controller || !valid(input.controller.pos)
@@ -22,6 +22,8 @@ function plan(input, seed = {entries: []}, limits) {
     const blocking = access.obstacles(input, seed.entries);
     const hub = access.hubOf(input, seed.entries);
     const flood = blocked => access.flood(input, blocked, hub);
+    const onLane = access.laneOf(hub, options.layout);
+    const lanePenalty = p => onLane(p.x, p.y) ? 1 : 0;
     const roomFor = (type, cap) => existing.concat(seed.entries, entries).filter(o => o.type === type).length < cap;
     const reachable = flood(blocking);
     const available = p => interior(p) && !input.terrain[idx(p)] && !taken.has(idx(p)) && reachable[idx(p)];
@@ -55,7 +57,8 @@ function plan(input, seed = {entries: []}, limits) {
                     && !sharedSeat(input.controller.pos, 3, e.pos, after, nextBlocking))) continue;
                 choices.push(p);
             }
-        choices.sort((a, b) => range(a, input.anchor.pos) - range(b, input.anchor.pos) || a.y - b.y || a.x - b.x);
+        choices.sort((a, b) => lanePenalty(a) - lanePenalty(b)
+            || range(a, input.anchor.pos) - range(b, input.anchor.pos) || a.y - b.y || a.x - b.x);
         return choices[0];
     };
     const sources = input.sources.slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
@@ -118,7 +121,8 @@ function plan(input, seed = {entries: []}, limits) {
                         e.purpose === 'sourceLink:' + s.id && sharedSeat(s.pos, 1, e.pos, after, nextBlocking)))) continue;
                     choices.push(p);
                 }
-            choices.sort((a, b) => range(a, input.anchor.pos) - range(b, input.anchor.pos) || a.y - b.y || a.x - b.x);
+            choices.sort((a, b) => lanePenalty(a) - lanePenalty(b)
+                || range(a, input.anchor.pos) - range(b, input.anchor.pos) || a.y - b.y || a.x - b.x);
             if (choices.length) add('terminal', 'coreTerminal', choices[0], 75);
             else blockers.push('noTerminalNearStorage');
         }
@@ -160,7 +164,7 @@ function plan(input, seed = {entries: []}, limits) {
             if (available(p) && sources.every(s => range(p, s.pos) > 2)
                 && range(p, input.controller.pos) > 3) free.push(p);
         }
-        const score = p => range(p, input.anchor.pos) * 10 + (storage ? range(p, storage.pos) : 0);
+        const score = p => range(p, input.anchor.pos) * 10 + (storage ? range(p, storage.pos) : 0) + lanePenalty(p) * 40;
         free.sort((a, b) => score(a) - score(b) || a.y - b.y || a.x - b.x);
         // Existing labs are immutable: all must fit in the same ten positions.
         const inputs = locked.concat(locked.length ? free.filter(p => locked.some(l => range(p, l) <= 2)) : free);

@@ -61,7 +61,7 @@ test('walkDistance counts steps around walls, not straight-line range', () => {
 });
 
 const LIMITS = {extensionMaxWalk: 20, towerMaxWalk: 12};
-for (const room of ['E9S18', 'E9S19', 'E7S18']) {
+for (const room of ['E9S18', 'E9S19', 'E7S18', 'E4S18']) {
     test(room + ' fresh plan: compact, reachable, policy-sized', () => {
         const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/base-builder', room + '.fresh.json')));
         const sim = new Simulation(fixture, {mode: 'observe'});
@@ -90,6 +90,15 @@ for (const room of ['E9S18', 'E9S19', 'E7S18']) {
         const towers = built.filter(e => e.type === 'tower').map(e => walkTo(e.pos));
         assert(Math.max(...ext) <= LIMITS.extensionMaxWalk, 'extension walk ' + Math.max(...ext));
         assert(Math.max(...towers) <= LIMITS.towerMaxWalk, 'tower walk ' + Math.max(...towers));
+        // Auto layout: the plan records which extension layout won; with the plus grid
+        // every extension touches a road lane.
+        assert(['grid', 'checker'].includes(plan.layout), 'layout ' + plan.layout);
+        if (plan.layout === 'grid') {
+            const roads = new Set(plan.entries.filter(e => e.type === 'road').map(e => e.pos.y * 50 + e.pos.x));
+            const lonely = plan.entries.filter(e => e.type === 'extension' && ![-51, -50, -49, -1, 1, 49, 50, 51]
+                .some(d => roads.has(e.pos.y * 50 + e.pos.x + d)));
+            assert.strictEqual(lonely.length, 0, 'extensions without an adjacent road: ' + lonely.length);
+        }
     });
 }
 test('lab caps of 1 and 2 plan that many labs (boost-only rooms)', () => {

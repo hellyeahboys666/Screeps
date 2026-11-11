@@ -37,14 +37,26 @@ function exposed(input, blocked, target, reach) {
     return false;
 }
 
-test('a walled valley with one 3-wide gap is sealed by exactly the gap', () => {
+test('choke mode (distanceWeight 0) seals a distant 3-wide gap with exactly the gap', () => {
     // Only the top edge is open; a wall row at y=10 with a gap at x=24..26.
     const input = room((x, y) => y > 0 && (x === 0 || x === 49 || y === 49) || (y === 10 && (x < 24 || x > 26)));
-    const result = planPerimeter(input, [], {});
+    const result = planPerimeter(input, [], {distanceWeight: 0});
     assert(!result.reason, result.reason);
     const cut = result.cut.map(i => ({x: i % 50, y: Math.floor(i / 50)}));
     assert.strictEqual(cut.length, 3);
     assert(cut.every(p => p.x >= 24 && p.x <= 26), JSON.stringify(cut));
+    assert.strictEqual(exposed(input, new Set(result.cut), input.anchor.pos, 3), false);
+});
+
+test('default (compact) mode hugs the base instead of a choke 25 tiles away', () => {
+    const input = room((x, y) => y > 0 && (x === 0 || x === 49 || y === 49) || (y === 10 && (x < 24 || x > 26)));
+    const result = planPerimeter(input, [], {});
+    assert(!result.reason, result.reason);
+    // Every rampart hugs the protected area: within buffer+1 of the spawn, or just
+    // outside the controller's protected neighbours (range 2).
+    const far = result.cut.filter(i => { const p = {x: i % 50, y: Math.floor(i / 50)};
+        return range(p, input.anchor.pos) > 4 && range(p, input.controller.pos) > 2; });
+    assert.strictEqual(far.length, 0, 'ramparts away from the base: ' + far.length);
     assert.strictEqual(exposed(input, new Set(result.cut), input.anchor.pos, 3), false);
 });
 
@@ -76,15 +88,16 @@ test('own structures are not barriers: a ring of extensions still gets ramparts'
     const ring = [];
     for (let x = 20; x <= 30; x++) for (const y of [30, 40]) ring.push({type: 'extension', pos: {x, y}});
     for (let y = 31; y <= 39; y++) for (const x of [20, 30]) ring.push({type: 'extension', pos: {x, y}});
-    const result = planPerimeter(input, ring, {maxCutTiles: 150});
+    // Protect the extensions here (default leaves them outside the wall).
+    const result = planPerimeter(input, ring, {maxCutTiles: 150, extensionBuffer: 1});
     assert(!result.reason, result.reason);
     assert(result.cut.length > 0);
     // Extensions only need to be out of melee reach by default (extensionBuffer 1).
     for (const e of ring) assert.strictEqual(exposed(input, new Set(result.cut), e.pos, 1), false);
 });
 
-for (const name of ['E9S18', 'E9S19', 'E7S18']) {
-    test(name + ' fresh: perimeter keeps key structures out of ranged reach, extensions out of melee', () => {
+for (const name of ['E9S18', 'E9S19', 'E7S18', 'E4S18']) {
+    test(name + ' fresh: perimeter keeps key structures out of ranged reach', () => {
         const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/base-builder', name + '.fresh.json')));
         const sim = new Simulation(fixture, {mode: 'observe'});
         sim.memory.baseBuilder.perimeter = true;
@@ -104,8 +117,10 @@ for (const name of ['E9S18', 'E9S19', 'E7S18']) {
         const input = {terrain};
         for (const e of plan.entries.filter(e => !['road', 'container', 'rampart', 'extractor'].includes(e.type)
             && !(e.type === 'link' && String(e.purpose).startsWith('sourceLink')))) {
-            // Key structures: out of ranged reach (3). Extensions: out of melee reach (1).
-            const reach = e.type === 'extension' ? 1 : 3;
+            // Key structures stay out of ranged reach (3). Extensions are left outside
+            // the wall by default (extensionBuffer -1), so they are not checked.
+            if (e.type === 'extension') continue;
+            const reach = 3;
             assert.strictEqual(exposed(input, blocked, e.pos, reach), false, e.type + ' exposed at ' + JSON.stringify(e.pos));
         }
     });
