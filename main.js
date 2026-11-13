@@ -32,6 +32,8 @@ var firstSpawnRuntime = require('base.builder.firstSpawnRuntime');
 movement.install();
 var roleAttacker = require('role.attacker');
 var roleLooter = require('role.looter');
+var roleRemoteGuard = require('role.remoteGuard');
+var remoteGuardManager = require('manager.remoteGuard');
 var strongholdManager = require('manager.strongholds');
 var roleQuad = require('role.quad');
 var roleDefender = require('role.defender');
@@ -102,6 +104,7 @@ var TRAFFIC_ROLE_PRIORITY = {
     attacker: 90,
     healer: 90,
     looter: 70,
+    remoteGuard: 90,
     remoteHealer: 90,
     remoteLorry: 75,
     remoteCarrier: 73,
@@ -127,6 +130,7 @@ var TRAFFIC_PROTECTED_YIELD_ROLES = {
     defender: true,
     healer: true,
     remoteHealer: true,
+    remoteGuard: true,
     quad: true,
     claimer: true,
     controllerAttacker: true
@@ -5068,6 +5072,10 @@ module.exports.loop = function () {
         {
             roleLooter.run(creep);
         }
+        else if (creep.memory.role == 'remoteGuard')
+        {
+            roleRemoteGuard.run(creep);
+        }
         else if (creep.memory.role == 'quad')
         {
             roleQuad.run(creep);
@@ -5102,6 +5110,15 @@ module.exports.loop = function () {
     }
     trafficStats.endTick();
     flowTraffic.endTick();
+    // Invaders in rooms our remote workers use: size the threat before spawning.
+    try
+    {
+        remoteGuardManager.run();
+    }
+    catch (error)
+    {
+        Memory.remoteGuardError = {tick: Game.time, message: String(error && error.stack || error).slice(0, 300)};
+    }
     var spawnNames = getAllSpawnNamesSorted();
     for (let spawnName of spawnNames)
     {
@@ -5386,6 +5403,21 @@ module.exports.loop = function () {
                 spawn.createHealer(spawn.room.energyAvailable, spawn.room.name, makeCreepName(spawn, 'healer')),
                 'healer');
             if (!(name < 0))
+            {
+                continue;
+            }
+        }
+        // Guards for remote workers threatened by Invaders. Hold the spawn for a
+        // full-size guard rather than let economy spawns use the energy first.
+        var remoteGuardRequest = remoteGuardManager.getSpawnRequest(spawn);
+        if (remoteGuardRequest && !hasPlannedRoomRoleSpawn(spawn.room, 'remoteGuard'))
+        {
+            name = recordSpawnAttempt(spawn,
+                spawn.createRemoteGuard(spawn.room.energyAvailable, remoteGuardRequest,
+                    makeCreepName(spawn, 'remoteGuard')),
+                'remoteGuard');
+            if (!(name < 0) || (name == ERR_NOT_ENOUGH_ENERGY
+                && spawn.room.energyCapacityAvailable >= remoteGuardRequest.cost))
             {
                 continue;
             }

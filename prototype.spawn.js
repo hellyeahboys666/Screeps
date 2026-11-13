@@ -250,6 +250,24 @@ module.exports = function() {
 		    }
 		    return this.spawnCreep(body, numbers, {memory: memory});
 		}
+		// Remote guard: per 900-energy block 3 RANGED_ATTACK + 1 HEAL + 4 MOVE (full
+		// speed off-road). HEAL sits last so it is the last part to break.
+		StructureSpawn.prototype.createRemoteGuard =
+		function (energy, request, numbers)
+		{
+		    var blocks = request && request.blocks > 0 ? request.blocks : 0;
+		    if (!blocks || energy < blocks * 900)
+		    {
+		        return ERR_NOT_ENOUGH_ENERGY;
+		    }
+		    var body = [];
+		    for (let i = 0; i < blocks * 2; i++) body.push(MOVE);
+		    for (let i = 0; i < blocks * 3; i++) body.push(RANGED_ATTACK);
+		    for (let i = 0; i < blocks * 2; i++) body.push(MOVE);
+		    for (let i = 0; i < blocks; i++) body.push(HEAL);
+		    return this.spawnCreep(body, numbers, {memory: {role: 'remoteGuard', target: request.room,
+		        home: this.room.name, wantsCombatBoosts: true, boostStrict: request.boosted === true}});
+		}
 		// CARRY + MOVE pairs to haul a dead stronghold's loot home.
 		StructureSpawn.prototype.createLooter =
 		function (energy, home, targetRoom, distance, numbers)
