@@ -250,6 +250,28 @@ module.exports = function() {
 		    }
 		    return this.spawnCreep(body, numbers, {memory: memory});
 		}
+		// CARRY + MOVE pairs to haul a dead stronghold's loot home.
+		StructureSpawn.prototype.createLooter =
+		function (energy, home, targetRoom, distance, numbers)
+		{
+		    var pairs = Math.min(25, Math.floor(energy / 100));
+		    if (pairs < 5)
+		    {
+		        return ERR_NOT_ENOUGH_ENERGY;
+		    }
+		    var body = [];
+		    for (let i = 0; i < pairs; i++)
+		    {
+		        body.push(CARRY);
+		    }
+		    for (let i = 0; i < pairs; i++)
+		    {
+		        body.push(MOVE);
+		    }
+		    var returnTicks = 60 * Math.max(1, distance || 1) + 60;
+		    return this.spawnCreep(body, numbers, {memory: {role: 'looter', home: home, target: targetRoom,
+		        returnTicks: returnTicks}});
+		}
 		// Plain ATTACK + MOVE pairs for a level-0 Invader core: it never shoots back,
 		// so no TOUGH or HEAL. Aim to finish in ~300 ticks (every tick alive keeps
 		// its reservation growing), but accept anything that finishes in ~1000.

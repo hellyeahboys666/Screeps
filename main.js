@@ -31,6 +31,8 @@ var baseBuilderRuntime = require('base.builder.runtime');
 var firstSpawnRuntime = require('base.builder.firstSpawnRuntime');
 movement.install();
 var roleAttacker = require('role.attacker');
+var roleLooter = require('role.looter');
+var strongholdManager = require('manager.strongholds');
 var roleQuad = require('role.quad');
 var roleDefender = require('role.defender');
 var roleHealer = require('role.healer');
@@ -99,6 +101,7 @@ var TRAFFIC_ROLE_PRIORITY = {
     defender: 95,
     attacker: 90,
     healer: 90,
+    looter: 70,
     remoteHealer: 90,
     remoteLorry: 75,
     remoteCarrier: 73,
@@ -5061,6 +5064,10 @@ module.exports.loop = function () {
         {
             roleAttacker.run(creep);
         }
+        else if (creep.memory.role == 'looter')
+        {
+            roleLooter.run(creep);
+        }
         else if (creep.memory.role == 'quad')
         {
             roleQuad.run(creep);
@@ -5233,6 +5240,7 @@ module.exports.loop = function () {
         var remoteE9S17WorkParts = defaultRemote.harvesterWorkParts;
         var manualReserveRequest = remoteSpawnPlan.manualReserveRequest;
         var invaderCoreRequest = remoteSpawnPlan.invaderCoreRequest;
+        var strongholdLooterRequest = strongholdManager.getLooterRequest(spawn);
         var bootstrapHarvesterTarget = Math.max(spawn.memory.minHarvesters || 0, sources.length || 1);
         var useHarvesterBootstrap = !containerSetupReady || !canSpawnMiner;
         var whiteFlagPlan = getCachedWhiteFlagPlan(spawn.room, sources, roomPlan.sourceLinkSourceIds);
@@ -5663,6 +5671,16 @@ module.exports.loop = function () {
                         makeCreepName(spawn, 'coreBreaker')),
                     'attacker');
             }
+            else if (strongholdLooterRequest && !hasPlannedRoomRoleSpawn(spawn.room, 'looter'))
+            {
+                name = recordSpawnAttempt(spawn,
+                    spawn.createLooter(spawn.room.energyAvailable,
+                        strongholdLooterRequest.home,
+                        strongholdLooterRequest.targetRoom,
+                        strongholdLooterRequest.distance,
+                        makeCreepName(spawn, 'looter')),
+                    'looter');
+            }
             else if (manualReserveRequest
                 && (manualReserveRequest.roomName != defaultRemote.roomName || defaultRemote.isOwner)
                 && spawn.room.energyCapacityAvailable >= 650
@@ -5741,4 +5759,13 @@ module.exports.loop = function () {
     // telemetry and spawn decisions, not once for each same-room spawn.
     baseBuilderRuntime.run();
     firstSpawnRuntime.run();
+    // Invader strongholds in our sector: scout, assess, run the quad, then loot.
+    try
+    {
+        strongholdManager.run();
+    }
+    catch (error)
+    {
+        Memory.strongholdError = {tick: Game.time, message: String(error && error.stack || error).slice(0, 300)};
+    }
 }
