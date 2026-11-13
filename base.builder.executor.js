@@ -249,7 +249,8 @@ function execute(room, snapshot, plan, options) {
         })) continue;
         // Future vital overlays must wait for the real underlying structure,
         // including types intentionally disabled by policy or future RCL caps.
-        if (entry.purpose === 'perimeter' && !perimeterAllowed(room)) { waiting = true; continue; }
+        if ((entry.purpose === 'perimeter' || entry.purpose === 'controllerSeal')
+            && !perimeterAllowed(room)) { waiting = true; continue; }
         if (entry.requiresType && !structures.some(function(o) {
             return o.my === true && o.structureType === entry.requiresType && same(o.pos, pos);
         })) { waiting = true; continue; }
@@ -302,6 +303,59 @@ function execute(room, snapshot, plan, options) {
     }
     return {status: waiting ? 'deferred' : 'complete'};
 }
+// Ramparts the current wall does not use (left by earlier plans, or built by hand)
+// still get repaired toward the room's target forever. Once every tile of the
+// planned wall stands with real hits, destroy them, a few per run. Only bare or
+// road tiles: a rampart covering any other structure is that structure's shield.
+// Off: Memory.baseBuilder.retireRamparts = false (or the room's baseBuilder).
+var RETIRE_MIN_WALL_HITS = 100000, RETIRE_TARGET_RATIO = 0.9, RETIRE_PER_RUN = 5;
+function retireRedundantRamparts(room, plan, anchor) {
+    var config = typeof Memory !== 'undefined' && Memory.baseBuilder;
+    var state = room.memory && room.memory.baseBuilder;
+    if (!state || typeof state !== 'object') return {status: 'inactive'};
+    if ((config && config.retireRamparts === false) || state.retireRamparts === false) return {status: 'off'};
+    if (!plan || plan.perimeterPlanned !== true || !Array.isArray(plan.wallKeys) || !plan.wallKeys.length
+        || !perimeterAllowed(room) || typeof room.find !== 'function') return {status: 'noWall'};
+    var structures = room.find(FIND_STRUCTURES);
+    if (!Array.isArray(structures)) return {status: 'inactive'};
+    var at = {};
+    for (var o of structures) {
+        if (!o || !o.pos) continue;
+        var k = o.pos.y * 50 + o.pos.x;
+        (at[k] || (at[k] = [])).push(o);
+    }
+    var target = anchor && anchor.memory && Number(anchor.memory.rampartTargetHits);
+    var need = Number.isFinite(target) && target > 0
+        ? Math.min(RETIRE_MIN_WALL_HITS, Math.floor(target * RETIRE_TARGET_RATIO)) : RETIRE_MIN_WALL_HITS;
+    var weak = 0;
+    for (var key of plan.wallKeys) {
+        if (!(at[key] || []).some(function(s) {
+            return s.structureType === 'constructedWall' || (s.structureType === 'rampart' && s.my === true
+                && s.hits >= Math.min(need, Math.floor(s.hitsMax / 2)));
+        })) weak++;
+    }
+    var wall = new Set(plan.wallKeys), planned = new Set();
+    for (var e of plan.entries) if (e && e.type === 'rampart' && e.pos) planned.add(e.pos.y * 50 + e.pos.x);
+    var redundant = structures.filter(function(s) {
+        if (!s || s.structureType !== 'rampart' || s.my !== true || !s.pos) return false;
+        var k = s.pos.y * 50 + s.pos.x;
+        return !wall.has(k) && !planned.has(k) && at[k].every(function(u) {
+            return u === s || u.structureType === 'road';
+        });
+    });
+    state.redundantRamparts = redundant.length;
+    if (!redundant.length) return {status: 'none'};
+    if (weak) { state.retireWaitingOn = weak; return {status: 'wallIncomplete', weak: weak}; }
+    delete state.retireWaitingOn;
+    var retired = 0;
+    for (var r of redundant.slice(0, RETIRE_PER_RUN)) if (r.destroy() === OK) retired++;
+    if (retired) {
+        state.retiredRamparts = (state.retiredRamparts || 0) + retired;
+        state.lastRetireTick = Game.time;
+        state.redundantRamparts = redundant.length - retired;
+    }
+    return {status: 'retired', count: retired};
+}
 // Final (RCL8) count the policy allows; the planner reserves space only for this.
 function planLimit(room, type) {
     var official = CONTROLLER_STRUCTURES[type] && CONTROLLER_STRUCTURES[type][8];
@@ -309,4 +363,5 @@ function planLimit(room, type) {
     var limit = policyValue(room, 'typeLimits', type, defaultLimit(type, 8, official));
     return Number.isInteger(limit) && limit >= 0 ? Math.min(official, limit) : 0;
 }
-module.exports = {execute: execute, typeLimit: typeLimit, planLimit: planLimit, perimeterEnabled: perimeterEnabled};
+module.exports = {execute: execute, typeLimit: typeLimit, planLimit: planLimit, perimeterEnabled: perimeterEnabled,
+    retireRedundantRamparts: retireRedundantRamparts};

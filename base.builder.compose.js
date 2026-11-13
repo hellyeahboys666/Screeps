@@ -124,6 +124,9 @@ function composeLayout(input, deps, options) {
         entries: critical.length ? [] : entries,
         blockers: critical, warnings: warnings,
         perimeterSupported: !!defense.perimeterSupported,
+        // Every tile the wall relies on (new, reused and controller-seal ramparts); the
+        // executor retires our other free-standing ramparts once this wall stands.
+        wallKeys: defense.perimeterSupported && !critical.length ? defense.wallKeys : undefined,
         perimeter: defense.perimeter ? Object.assign({}, defense.perimeter, towerPlan && towerPlan.moved
             ? {towersMoved: towerPlan.moved, minDamageBefore: towerPlan.before, minDamage: towerPlan.minDamage} : {}) : null
     };

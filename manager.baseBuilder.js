@@ -1,5 +1,8 @@
 // Room-level lifecycle. Deliberately inert until a room mode or new-room policy is set.
 var PLAN_VERSION = 3;
+// Bumped when the wall planner changes; a stored perimeter plan is re-planned in place.
+// 2: controller sealed instead of buffered, wall reuses standing ramparts, wallKeys.
+var PERIMETER_VERSION = 2;
 // Types whose planned count follows typeLimits (space is reserved only for these).
 var PLANNED_TYPES = ['extension', 'spawn', 'tower', 'lab', 'factory', 'powerSpawn', 'observer', 'nuker'];
 function result(state, status, detail) {
@@ -126,7 +129,8 @@ function run(room, deps) {
     // Turning the perimeter on (or changing its tile budget) re-plans in place to add it;
     // turning it off needs nothing (the executor stops placing perimeter ramparts).
     if (state.plan && state.plan.limits && perimeterOn
-        && (!state.plan.perimeterPlanned || state.plan.perimeterBudget !== maxCutTiles)) {
+        && (!state.plan.perimeterPlanned || state.plan.perimeterBudget !== maxCutTiles
+            || state.plan.perimeterVersion !== PERIMETER_VERSION)) {
         delete state.plan;
         delete state.generatedTick;
         state.replannedForPerimeter = Game.time;
@@ -161,6 +165,7 @@ function run(room, deps) {
         proposal.limits = limits;
         proposal.perimeterPlanned = perimeterOn;
         proposal.perimeterBudget = maxCutTiles;
+        if (perimeterOn) proposal.perimeterVersion = PERIMETER_VERSION;
         state.plan = proposal;
         state.planVersion = PLAN_VERSION;
         state.generatedTick = Game.time;
@@ -202,6 +207,12 @@ function run(room, deps) {
             ? Math.max(1500, config.hostileCooldown) : 1500
     });
     if (placement.status === 'deferred' || placement.status === 'placed') ensureSourceFlag(room, state, deps.executor);
+    // Only after a safe, idle placement pass (no hostiles, cooldown over, nothing placed).
+    if ((placement.status === 'deferred' || placement.status === 'complete')
+        && typeof deps.executor.retireRedundantRamparts === 'function') {
+        var retire = deps.executor.retireRedundantRamparts(room, state.plan, primary);
+        if (retire && retire.status === 'retired') state.lastRetire = {tick: Game.time, count: retire.count};
+    }
     return result(state, placement.status);
 }
 module.exports = {run: run};

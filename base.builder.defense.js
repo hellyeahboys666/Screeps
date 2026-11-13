@@ -75,8 +75,13 @@ function accessBlocker(input, passable) {
 // the tile budget wins.
 // ---------------------------------------------------------------------------
 const TILE_COST = 10, BUILT_TILE_COST = 40, BIG = 1 << 28, DISTANCE_WEIGHT = 12,
-    EXTENSION_BUFFER = -1, CREDIT_DEPTH = 6;
-const UNPROTECTED = new Set(['road', 'container', 'rampart', 'constructedWall', 'extractor']);
+    EXTENSION_BUFFER = -1, CREDIT_DEPTH = 6,
+    // Reusing a standing barrier near the base: a rampart still needs upkeep, a wall none.
+    REUSE_TILE_COST = 4, WALL_TILE_COST = 1;
+// The controller is not a base structure: it only needs its neighbours guarded
+// (attackController/claim are range 1), which the controller modes below handle.
+// Buffering it like a spawn dragged the wall out to wherever the controller sits.
+const UNPROTECTED = new Set(['road', 'container', 'rampart', 'constructedWall', 'extractor', 'controller']);
 const STEPS = [-51, -50, -49, -1, 1, 49, 50, 51];
 
 function maxFlowCut(open, core, cost, budget) {
@@ -182,6 +187,41 @@ function provesSealed(open, core, cut) {
     return true;
 }
 
+// Hostile-reachable set from the exits (8-way, through open tiles not in `blocked`).
+function exitReach(open, blocked) {
+    const seen = new Uint8Array(CELLS), queue = new Int32Array(CELLS);
+    let h = 0, t = 0;
+    for (let i = 0; i < CELLS; i++) {
+        const x = i % SIZE, y = (i - x) / SIZE;
+        if ((x === 0 || x === 49 || y === 0 || y === 49) && open[i] && !blocked[i]) { seen[i] = 1; queue[t++] = i; }
+    }
+    while (h < t) {
+        const i = queue[h++], x = i % SIZE;
+        for (const d of STEPS) {
+            const n = i + d;
+            if (n < 0 || n >= CELLS || Math.abs(n % SIZE - x) > 1 || !open[n] || blocked[n] || seen[n]) continue;
+            seen[n] = 1; queue[t++] = n;
+        }
+    }
+    return seen;
+}
+
+// Links that live with a source or the controller are satellites: each keeps its own
+// shield rampart (vitalOverlay), but the wall does not detour to enclose them.
+function satelliteLink(input, o) {
+    return o.type === 'link' && (input.sources.some(s => range(s.pos, o.pos) <= 2)
+        || range(input.controller.pos, o.pos) <= 2);
+}
+
+// controller: 'auto' (default) tries both and keeps the cheaper, true/'join' walls the
+// controller's neighbours in with the base, 'seal' ramparts just the controller's open
+// neighbours (attackController and claiming need range 1), false leaves it out.
+function controllerMode(value) {
+    if (value === true || value === 'join') return 'join';
+    if (value === 'seal' || value === 'auto') return value;
+    return false;
+}
+
 function planPerimeter(input, layout, options) {
     const budget = options.maxCutTiles === undefined ? 60 : options.maxCutTiles;
     if (!Number.isInteger(budget) || budget < 1 || budget > 150) return {reason: 'perimeterUnsupported:invalidCutBudget'};
@@ -189,16 +229,19 @@ function planPerimeter(input, layout, options) {
     for (let i = 0; i < CELLS; i++) terrainOpen[i] = input.terrain[i] ? 0 : 1;
     for (const o of input.sources.concat(input.minerals, [input.controller])) terrainOpen[index(o.pos)] = 0;
     const existing = input.structures.concat(input.spawns);
-    // Our ramparts and constructed walls are the only structural barriers, and only
-    // those near the base are credited (creditDepth): a far wall line is defense in
-    // depth, but the line that matters is the one inside full tower range.
-    const barriers = existing.filter(o => o.type === 'constructedWall' || (o.type === 'rampart' && o.my))
-        .map(o => index(o.pos));
+    // Our ramparts and constructed walls are the only structural barriers. Near the base
+    // (within creditDepth of the protected area) reusing one is cheap, so a standing
+    // line is kept instead of rebuilding it a tile closer; a far line gets no discount
+    // and is replaced by one inside full tower range.
+    const barrierCost = new Map();
+    for (const o of existing) {
+        if (o.type === 'constructedWall') barrierCost.set(index(o.pos), WALL_TILE_COST);
+        else if (o.type === 'rampart' && o.my && !barrierCost.has(index(o.pos))) barrierCost.set(index(o.pos), REUSE_TILE_COST);
+    }
     const creditDepth = Number.isInteger(options.creditDepth) ? options.creditDepth : CREDIT_DEPTH;
+    const reuseCost = Number.isFinite(options.reuseCost) ? options.reuseCost : null;
     const protect = existing.concat(input.sites, layout.map(o => Object.assign({my: true}, o)))
-        .filter(o => o && o.my && !UNPROTECTED.has(o.type)
-            // Source links live with their source; walling a source in is optional.
-            && !(o.type === 'link' && input.sources.some(s => range(s.pos, o.pos) <= 2)));
+        .filter(o => o && o.my && !UNPROTECTED.has(o.type) && !satelliteLink(input, o));
     for (const o of existing.concat(input.sites, layout)) {
         if (o && o.type !== 'road' && o.type !== 'rampart') built[index(o.pos)] = 1;
     }
@@ -207,48 +250,106 @@ function planPerimeter(input, layout, options) {
     // the ring hugs the key structures inside full tower range. 0..3 protects them too.
     const extensionBuffer = Number.isInteger(options.extensionBuffer) ? options.extensionBuffer : EXTENSION_BUFFER;
     const configs = options.perimeterConfigs || [
-        {buffer: 3, controller: true}, {buffer: 3, controller: false},
-        {buffer: 2, controller: true}, {buffer: 2, controller: false}, {buffer: 1, controller: false}];
+        {buffer: 3, controller: 'auto'}, {buffer: 3, controller: false},
+        {buffer: 2, controller: 'auto'}, {buffer: 2, controller: false}, {buffer: 1, controller: false}];
+    const ctrlNeighbors = [];
+    adjacent(index(input.controller.pos), n => { if (terrainOpen[n]) ctrlNeighbors.push(n); });
     let lastReason = 'perimeterUnsupported:noConfiguration';
     for (const config of configs) {
-        const core = new Uint8Array(CELLS);
+        const mode = controllerMode(config.controller);
+        const base = new Uint8Array(CELLS);
         const mark = (c, r) => {
             for (let y = Math.max(0, c.y - r); y <= Math.min(49, c.y + r); y++)
-                for (let x = Math.max(0, c.x - r); x <= Math.min(49, c.x + r); x++) if (terrainOpen[y * 50 + x]) core[y * 50 + x] = 1;
+                for (let x = Math.max(0, c.x - r); x <= Math.min(49, c.x + r); x++) if (terrainOpen[y * 50 + x]) base[y * 50 + x] = 1;
         };
         for (const o of protect) {
             if (o.type === 'extension' && extensionBuffer < 0) continue;
             mark(o.pos, o.type === 'extension' ? Math.min(config.buffer, extensionBuffer) : config.buffer);
         }
         mark(input.anchor.pos, config.buffer);
-        if (config.controller) mark(input.controller.pos, 1);
-        // Flood depth from the protected area over walkable terrain.
-        const depth = new Uint16Array(CELLS).fill(65535), queue = new Int32Array(CELLS);
-        let h = 0, t = 0;
-        for (let i = 0; i < CELLS; i++) if (core[i]) { depth[i] = 0; queue[t++] = i; }
-        while (h < t) {
-            const i = queue[h++], x = i % SIZE;
-            for (const d of STEPS) {
-                const n = i + d;
-                if (n < 0 || n >= CELLS || Math.abs(n % SIZE - x) > 1 || !terrainOpen[n] || depth[n] !== 65535) continue;
-                depth[n] = depth[i] + 1; queue[t++] = n;
+        // Walking depth from a set of tiles over open terrain.
+        const flood = seeds => {
+            const depth = new Uint16Array(CELLS).fill(65535), queue = new Int32Array(CELLS);
+            let h = 0, t = 0;
+            for (let i = 0; i < CELLS; i++) if (seeds[i]) { depth[i] = 0; queue[t++] = i; }
+            while (h < t) {
+                const i = queue[h++], x = i % SIZE;
+                for (const d of STEPS) {
+                    const n = i + d;
+                    if (n < 0 || n >= CELLS || Math.abs(n % SIZE - x) > 1 || !terrainOpen[n] || depth[n] !== 65535) continue;
+                    depth[n] = depth[i] + 1; queue[t++] = n;
+                }
+            }
+            return depth;
+        };
+        // Cost grows with depth from what the wall protects: a line hugging it (full
+        // tower damage, short walks for defenders/repairers) beats a shorter one across
+        // a distant choke point. Standing barriers near it are cheap to reuse.
+        const costFrom = depth => {
+            const cost = new Int32Array(CELLS);
+            for (let i = 0; i < CELLS; i++) {
+                const p = pos(i);
+                if (!interior(p.x, p.y)) { cost[i] = BIG; continue; }
+                if (barrierCost.has(i) && depth[i] <= creditDepth) {
+                    cost[i] = reuseCost === null ? barrierCost.get(i) : reuseCost;
+                    continue;
+                }
+                cost[i] = (built[i] ? BUILT_TILE_COST : TILE_COST) + Math.floor(Math.max(0, Math.min(depth[i], 200) - 1) * weight);
+            }
+            return cost;
+        };
+        const sealCost = i => barrierCost.has(i) ? (reuseCost === null ? barrierCost.get(i) : reuseCost)
+            : built[i] ? BUILT_TILE_COST : TILE_COST;
+        const candidates = [];
+        let cutFound = false;
+        if (mode === 'seal' || mode === 'auto' || mode === false) {
+            // The base alone, priced by distance from the base (never from the controller,
+            // so the cut has no reason to bulge out toward it).
+            const cost = costFrom(flood(base));
+            const r = maxFlowCut(terrainOpen, base, cost, budget);
+            if (r.reason) lastReason = 'perimeterUnsupported:' + r.reason + ':b' + config.buffer;
+            else {
+                cutFound = true;
+                let seal = [];
+                const guarded = base.slice();
+                if (mode !== false) {
+                    // Then rampart the controller neighbours hostiles can still reach; their
+                    // place is fixed by the controller, so distance does not price them.
+                    const blocked = new Uint8Array(CELLS);
+                    for (const i of r.cut) blocked[i] = 1;
+                    const reach = exitReach(terrainOpen, blocked);
+                    seal = ctrlNeighbors.filter(n => reach[n]);
+                    for (const n of ctrlNeighbors) guarded[n] = 1;
+                }
+                const wall = r.cut.concat(seal);
+                if (seal.every(n => interior(n % SIZE, (n - n % SIZE) / SIZE)) && provesSealed(terrainOpen, guarded, wall)) {
+                    candidates.push({mode: mode === false ? false : 'seal', cut: r.cut, seal, wall,
+                        price: r.cut.reduce((sum, i) => sum + cost[i], 0) + seal.reduce((sum, i) => sum + sealCost(i), 0)});
+                }
             }
         }
-        const open = terrainOpen.slice(), credited = [];
-        for (const i of barriers) if (!core[i] && depth[i] <= creditDepth) { open[i] = 0; credited.push(i); }
-        // Cost grows with depth: a line hugging the base (full tower damage, short walks
-        // for defenders/repairers) beats a shorter one across a distant choke point.
-        const cost = new Int32Array(CELLS);
-        for (let i = 0; i < CELLS; i++) {
-            const p = pos(i);
-            cost[i] = interior(p.x, p.y)
-                ? (built[i] ? BUILT_TILE_COST : TILE_COST) + Math.floor(Math.max(0, depth[i] - 1) * weight) : BIG;
+        // Joining is only worth trying when the base wall leaves the controller outside.
+        const sealed = candidates[0];
+        if (mode === 'join' || (mode === 'auto' && (!sealed || sealed.seal.length > 0))) {
+            // Walled in together: distance counts from the base or the controller.
+            const core = base.slice();
+            for (const n of ctrlNeighbors) core[n] = 1;
+            const cost = costFrom(flood(core));
+            const r = maxFlowCut(terrainOpen, core, cost, budget);
+            if (r.reason) lastReason = 'perimeterUnsupported:' + r.reason + ':b' + config.buffer;
+            else if ((cutFound = true) && provesSealed(terrainOpen, core, r.cut)) {
+                candidates.push({mode: 'join', cut: r.cut, seal: [], wall: r.cut,
+                    price: r.cut.reduce((sum, i) => sum + cost[i], 0)});
+            }
         }
-        const result = maxFlowCut(open, core, cost, budget);
-        if (result.reason) { lastReason = 'perimeterUnsupported:' + result.reason + ':b' + config.buffer; continue; }
-        if (result.cut.length > budget) { lastReason = 'perimeterUnsupported:overBudget:b' + config.buffer; continue; }
-        if (!provesSealed(open, core, result.cut)) { lastReason = 'perimeterUnsupported:cutProofFailed'; continue; }
-        return {cut: result.cut, config, credited};
+        // The cheaper wall wins; a tie goes to the seal (fewer ramparts by the controller).
+        const chosen = candidates.sort((a, b) => a.price - b.price || (a.mode === 'seal' ? -1 : 1))[0];
+        if (!chosen) { if (cutFound) lastReason = 'perimeterUnsupported:cutProofFailed'; continue; }
+        if (chosen.wall.length > budget) { lastReason = 'perimeterUnsupported:overBudget:b' + config.buffer; continue; }
+        const wallKeys = Array.from(new Set(chosen.wall)).sort((a, b) => a - b);
+        return {cut: chosen.cut.filter(i => !barrierCost.has(i)), seal: chosen.seal.filter(i => !barrierCost.has(i)),
+            config: Object.assign({}, config, {controller: chosen.mode}),
+            credited: wallKeys.filter(i => barrierCost.has(i)), wallKeys};
     }
     return {reason: lastReason};
 }
@@ -302,21 +403,27 @@ function planDefense(input, layout = [], options = {}) {
     if (access) { result.blockers.push(access); return result; }
     const perimeter = planPerimeter(input, layout, options);
     if (perimeter.reason) { result.blockers.push(perimeter.reason); return result; }
-    for (const i of perimeter.cut) {
-        if (ramparts.has(i)) continue;
+    const addWall = (i, purpose) => {
+        if (ramparts.has(i)) return;
         if (placed.has(i)) {
             // The wall crosses a structure's shield rampart (e.g. a source link not built
             // until RCL5-6): it becomes a wall rampart and no longer waits for the structure,
             // otherwise the wall would have a hole until then.
             const overlay = result.entries.find(e => e.purpose === 'vitalOverlay' && index(e.pos) === i);
-            if (overlay) { overlay.purpose = 'perimeter'; delete overlay.requiresType; }
-            continue;
+            if (overlay) { overlay.purpose = purpose; delete overlay.requiresType; }
+            return;
         }
-        result.entries.push({type: 'rampart', purpose: 'perimeter', pos: pos(i), priority: 90});
-    }
+        placed.add(i);
+        result.entries.push({type: 'rampart', purpose, pos: pos(i), priority: 90});
+    };
+    for (const i of perimeter.cut) addWall(i, 'perimeter');
+    // The controller's open neighbours, when sealing them beats walling the controller in.
+    for (const i of perimeter.seal) addWall(i, 'controllerSeal');
     result.perimeterSupported = true;
-    result.perimeter = {tiles: perimeter.cut.length, buffer: perimeter.config.buffer, controller: perimeter.config.controller};
+    result.perimeter = {tiles: perimeter.cut.length, buffer: perimeter.config.buffer,
+        controller: perimeter.config.controller, seal: perimeter.seal.length};
     result.barrierKeys = perimeter.credited;
+    result.wallKeys = perimeter.wallKeys;
     result.perimeter.credited = perimeter.credited.length;
     return result;
 }
