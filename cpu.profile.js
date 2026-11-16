@@ -11,8 +11,9 @@ var acc = null, last = 0, on = false;
 
 function start()
 {
-    on = typeof Memory != 'undefined' && typeof Game != 'undefined' && Game.cpu && typeof Game.cpu.getUsed == 'function';
-    // Reading Memory here would parse it; check the flag only after the first mark.
+    // Do not touch Memory here: the first read parses it, and that cost belongs to
+    // the 'memoryParse' mark right after the loop's first Memory access.
+    on = typeof Game != 'undefined' && !!Game.cpu && typeof Game.cpu.getUsed == 'function';
     if (!on) return;
     if (!acc || Game.time < acc.from || Game.time - acc.from >= WINDOW) acc = {from: Game.time, ticks: 0, sections: {}, max: 0};
     acc.ticks++;

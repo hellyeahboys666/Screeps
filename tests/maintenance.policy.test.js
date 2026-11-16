@@ -290,6 +290,26 @@ function makeRoom(level, structures) {
     assert.strictEqual(summaryRescue.action, 'repairDecayRescue');
 })();
 
+(function testOneUpkeepShotPerRoomPerTick() {
+    const harness = loadMainMaintenanceHarness();
+    const api = harness.api;
+    const roadA = {id: 'roadA', structureType: 'road', hits: 1000, hitsMax: 5000};
+    const roadB = {id: 'roadB', structureType: 'road', hits: 2000, hitsMax: 5000};
+    const scuffed = {id: 'scuffed', structureType: 'road', hits: 4400, hitsMax: 5000};
+    assert.strictEqual(api.isTowerMaintenanceTarget(scuffed), false, 'a 600-hit scuff waits for a full 800 shot');
+    assert.strictEqual(api.isTowerMaintenanceTarget(roadB), true);
+    const room = makeRoom(8, [roadA, roadB, scuffed]);
+    const repairs = [];
+    api.runTowerDefense(room, [makeTower(1000, repairs), makeTower(1000, repairs), makeTower(1000, repairs)], [], [], []);
+    assert.deepStrictEqual(repairs, ['roadA'], 'one tower repairs the worst road; the others stay idle');
+
+    harness.sandbox.Game.time++;
+    const rampart = {id: 'rampart', structureType: 'rampart', my: true, hits: 99000, hitsMax: 300000000};
+    const rampartRepairs = [];
+    api.runTowerDefense(makeRoom(8, []), [makeTower(1000, rampartRepairs), makeTower(1000, rampartRepairs)], [], [], [], [rampart]);
+    assert.deepStrictEqual(rampartRepairs, ['rampart'], 'rampart upkeep is one shot, not one per tower');
+})();
+
 (function testEstablishedRampartsUseTowerForNormalDecay() {
     const harness = loadMainMaintenanceHarness();
     const api = harness.api;

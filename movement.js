@@ -306,12 +306,42 @@ function callOriginalMoveTo(creep, originalMoveTo, args)
     return originalMoveTo.apply(creep, args);
 }
 
+// Roles that work inside their own room. Without maxRooms a moveTo between two
+// points of the room may search (and walk) through neighbouring rooms when the
+// direct way is crowded, which costs several times the CPU of a one-room search.
+var HOME_ROOM_ROLES = {
+    harvester: true, upgrader: true, builder: true, repairer: true, miner: true, lorry: true,
+    mineralLorry: true, Slinker: true, Clinker: true, Blinker: true, extractor: true
+};
+
+function withHomeRoomLimit(creep, target, opts, argCount)
+{
+    if (argCount > 2 || typeof target == 'number' || !creep || !creep.memory
+        || !HOME_ROOM_ROLES[creep.memory.role] || (opts && opts.maxRooms != undefined))
+    {
+        return undefined;
+    }
+    var targetPos = getTargetPos(target);
+    if (!targetPos || !creep.room || targetPos.roomName != creep.room.name)
+    {
+        return undefined;
+    }
+    var newOpts = copyOptions(opts);
+    newOpts.maxRooms = 1;
+    return newOpts;
+}
+
 function moveToWithMatrix(creep, originalMoveTo, args)
 {
     var target = args[0];
     var opts = args.length > 1 ? args[1] : undefined;
     if (!shouldUseCivilianMatrix(creep, target, opts, args.length))
     {
+        var limited = withHomeRoomLimit(creep, target, opts, args.length);
+        if (limited)
+        {
+            return originalMoveTo.call(creep, target, limited);
+        }
         return callOriginalMoveTo(creep, originalMoveTo, args);
     }
 

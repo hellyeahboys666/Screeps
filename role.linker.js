@@ -1,10 +1,56 @@
 var energyFallback = require('energy.fallback');
 var sourceLinkUtils = require('source.link');
 
+// A seated Slinker repeats the same few actions all its life. The slow path below
+// resolves flag, source, link, seat and receiving link; once seated that result is
+// cached for FAST_TTL ticks and only the actions run in between (~0.05 CPU instead
+// of ~0.2 per tick for the lookups).
+var FAST_TTL = 100;
+
+function runSlinkerFast(creep)
+{
+    var fast = creep.memory.fast;
+    if (!fast || fast.until < Game.time || creep.pos.x != fast.x || creep.pos.y != fast.y)
+    {
+        return false;
+    }
+    var source = Game.getObjectById(fast.sourceId);
+    var link = Game.getObjectById(fast.linkId);
+    if (!source || !link)
+    {
+        delete creep.memory.fast;
+        return false;
+    }
+    // Same order as the slow path: hand over only when the next harvest would not fit.
+    if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0
+        && creep.store.getFreeCapacity(RESOURCE_ENERGY) < fast.harvestPerTick)
+    {
+        creep.transfer(link, RESOURCE_ENERGY);
+    }
+    if (source.energy > 0)
+    {
+        creep.harvest(source);
+    }
+    if (fast.receiverId && link.cooldown == 0 && link.store.getFreeCapacity(RESOURCE_ENERGY) < 30)
+    {
+        var receiver = Game.getObjectById(fast.receiverId);
+        if (receiver && receiver.store.getFreeCapacity(RESOURCE_ENERGY) > 0)
+        {
+            link.transferEnergy(receiver, Math.min(link.store.getUsedCapacity(RESOURCE_ENERGY),
+                receiver.store.getFreeCapacity(RESOURCE_ENERGY)));
+        }
+    }
+    return true;
+}
+
 var roleLinker = {
 
     /** @param {Creep} creep **/
     run: function(creep) {
+        if (creep.memory.role == 'Slinker' && runSlinkerFast(creep))
+        {
+            return;
+        }
         var storage = creep.room.storage;
         var CLink = undefined;
         if (creep.room.controller)
@@ -118,6 +164,17 @@ var roleLinker = {
                 {
                     SLink.transferEnergy(receiverLink, transferAmount);
                 }
+            }
+            if (SLink && seat && creep.pos.isEqualTo(seat))
+            {
+                creep.memory.fast = {sourceId: source.id, linkId: SLink.id,
+                    receiverId: receiverLink && receiverLink.id != SLink.id ? receiverLink.id : undefined,
+                    x: creep.pos.x, y: creep.pos.y, until: Game.time + FAST_TTL,
+                    harvestPerTick: creep.getActiveBodyparts(WORK) * HARVEST_POWER};
+            }
+            else
+            {
+                delete creep.memory.fast;
             }
         }
         else if (role == 'Clinker')

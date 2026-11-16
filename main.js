@@ -30,9 +30,15 @@ var flowTraffic = require('traffic.flow');
 var baseBuilderRuntime = require('base.builder.runtime');
 var firstSpawnRuntime = require('base.builder.firstSpawnRuntime');
 movement.install();
+// creep.idle needs to see this tick's move orders even when traffic stats are off.
+if (typeof trafficStats.installMoveHook == 'function')
+{
+    trafficStats.installMoveHook();
+}
 var roleAttacker = require('role.attacker');
 var roleLooter = require('role.looter');
 var cpuProfile = require('cpu.profile');
+var creepIdle = require('creep.idle');
 var roleRemoteGuard = require('role.remoteGuard');
 var remoteGuardManager = require('manager.remoteGuard');
 var strongholdManager = require('manager.strongholds');
@@ -52,6 +58,12 @@ var TOWER_MAINTENANCE_ENERGY_RESERVE = 600;
 // Below RCL6 towers skip ordinary maintenance to save energy, but nothing else
 // repairs roads and containers there, so they rescue anything under half hits.
 var TOWER_DECAY_RESCUE_RATIO = 0.5;
+// Every tower action is a 0.2 CPU intent. One upkeep shot per room per tick (up to
+// 800 hits) outpaces road wear and rampart decay, so the other towers stay idle
+// instead of each repairing something every tick.
+var TOWER_UPKEEP_SHOTS_PER_TICK = 1;
+// Roads and containers are repaired only once a full close-range shot (800) fits.
+var TOWER_UPKEEP_MIN_MISSING = 800;
 var RAMPART_REPAIRER_RESTART_RATIO = 0.95;
 var TOWER_CRITICAL_HEAL_RATIO = 0.45;
 var DEFAULT_RAMPART_TARGET_HITS = 100000;
@@ -2249,9 +2261,12 @@ function isTowerMaintenanceTarget(structure)
     return structure
         && structure.hits != undefined
         && structure.hitsMax > 0
-        // A tower repairs at least 200 per shot; a road scuffed by a few
-        // footsteps would waste nearly all of it (and 0.2 CPU per tower).
-        && structure.hitsMax - structure.hits >= Math.min(200, Math.floor(structure.hitsMax / 5))
+        // A road scuffed by a few footsteps would waste most of an 800-hit shot
+        // (and its 0.2 CPU): wait until a full shot fits. Owned structures that
+        // took damage are repaired as before.
+        && structure.hitsMax - structure.hits >= (structure.my == true
+            ? Math.min(200, Math.floor(structure.hitsMax / 5))
+            : Math.min(TOWER_UPKEEP_MIN_MISSING, Math.floor(structure.hitsMax / 2)))
         && structure.structureType != STRUCTURE_WALL
         && structure.structureType != STRUCTURE_RAMPART
         && (structure.my == true
@@ -2459,7 +2474,8 @@ function runTowerDefense(room, towers, hostiles, decayingRamparts, creepsInRoom,
     var rampartMaintenanceTarget = rampartMaintenanceTargets && rampartMaintenanceTargets.length > 0
         ? rampartMaintenanceTargets[0] : undefined;
     var maintenanceTargets = (!hostiles || hostiles.length == 0)
-        ? getRoomTowerMaintenanceTargets(room) : [];
+        ? getRoomTowerMaintenanceTargets(room).slice(0, TOWER_UPKEEP_SHOTS_PER_TICK) : [];
+    var rampartUpkeepShots = 0;
     var decayRescueTargets = (!hostiles || hostiles.length == 0)
         ? getRoomTowerDecayRescueTargets(room) : [];
     var decayRescueIndex = 0;
@@ -2533,9 +2549,10 @@ function runTowerDefense(room, towers, hostiles, decayingRamparts, creepsInRoom,
             summary.repairTarget = repairTarget.id;
             summary.repairHits = repairTarget.hits;
         }
-        else if (shouldTowerPerformRampartMaintenance(
+        else if (rampartUpkeepShots < TOWER_UPKEEP_SHOTS_PER_TICK && shouldTowerPerformRampartMaintenance(
             room, tower, rampartMaintenanceTarget, hostiles))
         {
+            rampartUpkeepShots++;
             tower.repair(rampartMaintenanceTarget);
             summary.action = 'repairRampartMaintenance';
             summary.repairTarget = rampartMaintenanceTarget.id;
@@ -3190,6 +3207,33 @@ function getRoomPrimarySpawn(room)
 {
     var spawns = getRoomSpawns(room);
     return spawns.length > 0 ? spawns[0] : undefined;
+}
+
+// Requests that only this spawn acts on (not synced from the room's primary), or a
+// quad request, which may pick any spawn: such a spawn always runs its own pass.
+var SPAWN_SPECIFIC_REQUEST_KEYS = ['spawnQuad', 'spawnSoloAttack', 'spawnMineralLorry', 'claimRoom',
+    'attackRoom', 'controllerAttackRoom', 'attackControllerRoom'];
+function hasSpawnSpecificRequest(spawn)
+{
+    if (Memory.spawnQuad || Memory.quadSpawn || (spawn.room.memory && spawn.room.memory.spawnQuad))
+    {
+        return true;
+    }
+    for (var key of SPAWN_SPECIFIC_REQUEST_KEYS)
+    {
+        if (spawn.memory[key] != undefined && spawn.memory[key] !== false)
+        {
+            return true;
+        }
+    }
+    for (var name in Game.spawns)
+    {
+        if (Game.spawns[name].memory && Game.spawns[name].memory.spawnQuad)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 function isPrimaryRoomSpawn(spawn)
@@ -5058,11 +5102,19 @@ module.exports.loop = function () {
         }
         else if (creep.memory.role == 'lorry')
         {
-            roleLorry.run(creep);
+            if (!creepIdle.sleeping(creep))
+            {
+                roleLorry.run(creep);
+                creepIdle.record(creep);
+            }
         }
         else if (creep.memory.role == 'remoteLorry')
         {
-            roleRemoteLorry.run(creep);
+            if (!creepIdle.sleeping(creep))
+            {
+                roleRemoteLorry.run(creep);
+                creepIdle.record(creep);
+            }
         }
         else if (creep.memory.role == 'remoteCarrier')
         {
@@ -5140,6 +5192,15 @@ module.exports.loop = function () {
         // A busy secondary spawn can't use this tick's plan; the primary already
         // handles the room-level work (towers, safe mode, market, labs).
         if (spawn.spawning && !isPrimaryRoomSpawn(spawn))
+        {
+            continue;
+        }
+        // Room duties (towers, markets, power) run with the primary spawn. When an
+        // earlier spawn of this room already ran the whole spawn decision this tick
+        // and found nothing to make, another idle spawn here would reach the same
+        // answer: skip its pass (~0.45 CPU each).
+        if (!isPrimaryRoomSpawn(spawn) && getRoomTickCache(spawn.room).spawnDecisionIdle === true
+            && !hasSpawnSpecificRequest(spawn))
         {
             continue;
         }
@@ -5790,6 +5851,10 @@ module.exports.loop = function () {
                     delete spawn.memory.spawnMineralLorry;
                 }
             }
+        }
+        if (name === undefined)
+        {
+            getRoomTickCache(spawn.room).spawnDecisionIdle = true;
         }
     }
     cpuProfile.mark('spawn:decide');

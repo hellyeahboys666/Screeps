@@ -682,10 +682,16 @@ module.exports = function() {
 		    }
 		    return this.spawnCreep(body, numbers, {memory: memory});
 		};
+		// 10 WORK empties a 3000-energy source in 150 of its 300 ticks, so the
+		// Slinker harvests (a 0.2 CPU intent) half as often as the 5-WORK body
+		// that harvests every tick for the same energy.
 		StructureSpawn.prototype.createSLinker =
 		function (sourceId, numbers)
 		{
-		    return this.spawnCreep([WORK, WORK, WORK, WORK, WORK, CARRY, MOVE], numbers, {memory:
+		    var body = this.room.energyCapacityAvailable >= 1250
+		        ? [WORK, WORK, WORK, WORK, WORK, WORK, WORK, WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE]
+		        : [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE];
+		    return this.spawnCreep(body, numbers, {memory:
 		    {role: 'Slinker', empty: true, home: this.room.name, sourceId: sourceId}
 		    });
 		};
