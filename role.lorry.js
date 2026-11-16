@@ -116,13 +116,33 @@ function roomHasPendingQuadSpawn(room)
         && getGlobalQuadSourceRoom(Memory.quadSpawn, room.name) == room.name;
 }
 
+// A drained spawn/extension pool comes before source-side pickups while storage
+// can cover it. Otherwise a part-loaded lorry keeps collecting small piles until it
+// is 75% full while spawning stalls (E7S18: 600/1600 carried, extensions at 26%,
+// 940k energy in storage).
+var SPAWN_REFILL_RATIO = 0.5;
+var SPAWN_REFILL_STORAGE_FLOOR = 20000;
+
+function needsSpawnRefill(room)
+{
+    var storage = room && room.storage;
+    return !!(storage
+        && room.energyCapacityAvailable > 0
+        && room.energyAvailable < room.energyCapacityAvailable * SPAWN_REFILL_RATIO
+        && storage.store.getUsedCapacity(RESOURCE_ENERGY) >= SPAWN_REFILL_STORAGE_FLOOR);
+}
+
 function getStoragePickupPriorityReason(room, roomUnderAttack)
 {
     if (roomUnderAttack)
     {
         return 'combat';
     }
-    return roomHasPendingQuadSpawn(room) ? 'quadSpawn' : undefined;
+    if (roomHasPendingQuadSpawn(room))
+    {
+        return 'quadSpawn';
+    }
+    return needsSpawnRefill(room) ? 'spawnRefill' : undefined;
 }
 
 function findPriorityStoragePickup(storage)
@@ -842,7 +862,8 @@ roleLorry._test = {
     getReservedPickupCapacity: getReservedPickupCapacity,
     clearLorryPickup: clearLorryPickup,
     rememberLorryPickup: rememberLorryPickup,
-    findMostDepletedTowerBelowMaintenanceReserve: findMostDepletedTowerBelowMaintenanceReserve
+    findMostDepletedTowerBelowMaintenanceReserve: findMostDepletedTowerBelowMaintenanceReserve,
+    getStoragePickupPriorityReason: getStoragePickupPriorityReason
 };
 
 module.exports = roleLorry;
