@@ -177,7 +177,9 @@ function ensureStats()
         {
             history.unshift(makeSummary(existing));
         }
-        while (history.length > 5)
+        // One past window is enough for diagnosis; every kept window is parsed and
+        // re-serialised with Memory on every tick (~4 KB each).
+        while (history.length > 1)
         {
             history.pop();
         }

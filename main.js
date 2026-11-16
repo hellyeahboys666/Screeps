@@ -32,6 +32,7 @@ var firstSpawnRuntime = require('base.builder.firstSpawnRuntime');
 movement.install();
 var roleAttacker = require('role.attacker');
 var roleLooter = require('role.looter');
+var cpuProfile = require('cpu.profile');
 var roleRemoteGuard = require('role.remoteGuard');
 var remoteGuardManager = require('manager.remoteGuard');
 var strongholdManager = require('manager.strongholds');
@@ -615,8 +616,10 @@ function isTrafficManagerEnabled()
 
 function observeCreepMovementAfter(creep)
 {
+    cpuProfile.mark('role:' + (creep.memory.role || 'none'));
     flowTraffic.observeCreep(creep);
     trafficStats.observeCreepAfter(creep);
+    cpuProfile.mark('creepTraffic');
 }
 
 function getTrafficPriority(creep)
@@ -4946,7 +4949,9 @@ function canEverSpawnSoloAttacker(energyCapacity, style)
 }
 
 module.exports.loop = function () {
+    cpuProfile.start();
     Memory.creeps = Memory.creeps || {};
+    cpuProfile.mark('memoryParse');
     Memory.spawns = Memory.spawns || {};
     for (let spawnName in Memory.spawns)
     {
@@ -4980,9 +4985,12 @@ module.exports.loop = function () {
     {
         ensureSpawnMemoryDefaults(Game.spawns[spawnName]);
     }
+    cpuProfile.mark('housekeeping');
     powerCreepManager.run();
+    cpuProfile.mark('powerCreeps');
     trafficStats.beginTick();
     flowTraffic.beginTick();
+    cpuProfile.mark('trafficBegin');
     for(var name in Game.creeps) {
         var creep = Game.creeps[name];
         trafficStats.observeCreepBefore(creep);
@@ -5110,6 +5118,7 @@ module.exports.loop = function () {
     }
     trafficStats.endTick();
     flowTraffic.endTick();
+    cpuProfile.mark('trafficEnd');
     // Invaders in rooms our remote workers use: size the threat before spawning.
     try
     {
@@ -5119,9 +5128,12 @@ module.exports.loop = function () {
     {
         Memory.remoteGuardError = {tick: Game.time, message: String(error && error.stack || error).slice(0, 300)};
     }
+    cpuProfile.mark('remoteGuard');
     var spawnNames = getAllSpawnNamesSorted();
     for (let spawnName of spawnNames)
     {
+        // Charges the rest of the previous spawn's pass (any `continue` path).
+        cpuProfile.mark('spawn:decide');
         let spawn = Game.spawns[spawnName];
         syncSameRoomSpawnMemory(spawn);
         cleanupObsoleteSpawnMemory(spawn);
@@ -5166,11 +5178,13 @@ module.exports.loop = function () {
         {
             spawn.room.memory.hostileNpcLastSeen = Game.time;
         }
+        cpuProfile.mark('spawn:setup');
         if (isPrimaryRoomSpawn(spawn))
         {
             triggerAutoSafeMode(spawn.room, spawn, hostiles);
             powerSpawnManager.run(spawn);
         }
+        cpuProfile.mark('spawn:powerSpawn');
         if (isPrimaryRoomSpawn(spawn))
         {
             // Sells the room's own mineral above a reserve; throttles itself.
@@ -5190,6 +5204,7 @@ module.exports.loop = function () {
             specialStructureMarket.maintain(spawn);
             energyReserveMarket.maintain(spawn);
         }
+        cpuProfile.mark('spawn:markets');
         var nH = countRoomRoleWithPlanned(spawn.room, creepsInRoom, 'harvester');
         var nB = countRoomRoleWithPlanned(spawn.room, creepsInRoom, 'builder');
         var nU = countRoomRoleWithPlanned(spawn.room, creepsInRoom, 'upgrader');
@@ -5238,10 +5253,14 @@ module.exports.loop = function () {
         spawn.memory.mineralContainerId = roomPlan.mineralContainerId;
         spawn.memory.mineralContainerMineralAmount = roomPlan.mineralContainerMineralAmount;
         spawn.memory.mineralContainerNeedsLorry = roomPlan.mineralContainerNeedsLorry;
+        cpuProfile.mark('spawn:counts');
         var remoteSpawnPlan = remoteMining.getSpawnPlan(spawn);
+        cpuProfile.mark('spawn:remoteMining');
         var remoteBuildPlan = remoteBuild.getSpawnPlan(spawn);
+        cpuProfile.mark('spawn:remoteBuild');
         var specialStructureLoadRequest = specialStructureMarket.getLoadRequest(spawn, creepsInRoom);
         var combatBoostLabLoadRequest = getCombatBoostLabLoadRequest(spawn, creepsInRoom);
+        cpuProfile.mark('spawn:labRequests');
         var defaultRemote = remoteSpawnPlan.defaultRemote;
         var nlE11S23Source0 = defaultRemote.harvesterCount
             + getPlannedRemoteSpawnCount(spawn.room,
@@ -5348,6 +5367,7 @@ module.exports.loop = function () {
         //
         //
         //
+        cpuProfile.mark('spawn:boostsFlags');
         var rampartTargetHits = getSpawnRampartTargetHits(spawn);
         var ownedRamparts = getRoomOwnedRamparts(spawn.room);
         var rampartsBelowTarget = [];
@@ -5380,6 +5400,7 @@ module.exports.loop = function () {
                 creepsInRoom,
                 rampartRepairPolicy.towerMaintenanceRamparts);
         }
+        cpuProfile.mark('spawn:towers');
         if (spawn.spawning)
         {
             continue;
@@ -5771,6 +5792,7 @@ module.exports.loop = function () {
             }
         }
     }
+    cpuProfile.mark('spawn:decide');
     // Towers and auto safe mode normally run with each room's primary spawn. Catch
     // owned rooms that skipped that: no living spawn (e.g. under siege), or a
     // primary spawn that took the emergency-upgrader `continue`.
@@ -5789,8 +5811,11 @@ module.exports.loop = function () {
     }
     // Read-only unless explicitly configured; run once per room after defense
     // telemetry and spawn decisions, not once for each same-room spawn.
+    cpuProfile.mark('roomsPass');
     baseBuilderRuntime.run();
+    cpuProfile.mark('baseBuilder');
     firstSpawnRuntime.run();
+    cpuProfile.mark('firstSpawn');
     // Invader strongholds in our sector: scout, assess, run the quad, then loot.
     try
     {
@@ -5800,4 +5825,6 @@ module.exports.loop = function () {
     {
         Memory.strongholdError = {tick: Game.time, message: String(error && error.stack || error).slice(0, 300)};
     }
+    cpuProfile.mark('strongholds');
+    cpuProfile.end();
 }
